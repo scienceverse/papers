@@ -1,0 +1,39 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Collabra: Psychology - Complete Open-Access Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "psychology",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A complete corpus of 749 open-access articles published in Collabra: Psychology from 2017 to June 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. Each paper is represented as a structured R object containing full text, references, figures, tables, and bibliographic metadata extracted via GROBID 0.9.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-16",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/collabra",
+  "dc:source": "Collabra: Psychology, ISSN 2474-7394, DOI prefix 10.1525/collabra",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://online.ucpress.edu/collabra",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-06-16",
+  "dc:rights": "CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+  "dc:provenance": {
+    "doi_source": "CrossRef API (api.crossref.org)",
+    "pdf_source": "Unpaywall API (api.unpaywall.org)",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud/api/processFulltextDocument",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "conversion_date": "2026-06-16"
+  }
+}
