@@ -4,9 +4,9 @@ A shared repository of open-access scientific manuscripts for validating tools
 that automatically check scientific papers. The goal is to provide a common,
 citable benchmark corpus that developers of tools such as
 [Statcheck](https://github.com/MicheleNuijten/statcheck),
-[Regcheck](https://github.com/scienceverse/metacheck),
+[Regcheck](https://github.com/JamieCummins/regcheck),
 [Metacheck](https://github.com/scienceverse/metacheck), and
-[ESCIcheck](https://github.com/scienceverse/metacheck)
+[ESCIcheck](https://github.com/giladfeldman/escicheck)
 can use to systematically test and validate their tools on real published
 literature.
 
@@ -41,8 +41,8 @@ related tools.
 | Paperlist (`.rds`) | GitHub Release asset | Structured R objects extracted from PDFs via GROBID; the main format for tool validation |
 | TEI-XML | not stored | Intermediate GROBID output used to generate paperlists |
 
-Other formats (plain text, JSON) can be added to the corpus subfolder if
-needed. If you need a format that is not yet available, please
+Other formats (plain text, JSON) can be added to a corpus subfolder if needed.
+If you need a format that is not yet available, please
 [open an issue](https://github.com/scienceverse/papers/issues).
 
 ---
