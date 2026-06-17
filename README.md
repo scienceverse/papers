@@ -52,6 +52,7 @@ If you need a format that is not yet available, please
 | Corpus | Journal | Papers | Years | License |
 |--------|---------|--------|-------|---------|
 | [collabra](collabra/) | Collabra: Psychology | 749 | 2017-2026 | CC-BY 4.0 |
+| [jdm](jdm/) | Judgment and Decision Making | 855 | 2006-2022 | CC-BY 4.0 |
 
 ---
 
