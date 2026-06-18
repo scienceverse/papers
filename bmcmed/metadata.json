@@ -1,0 +1,40 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "BMC Medicine - Stratified Open-Access Sample Corpus (2016-2025)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "medicine",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A stratified random sample of 1,000 open-access articles published in BMC Medicine (2016-2025, 100 per year), converted to metacheck paperlist objects for validation of AI and text-mining tools. DOIs were verified against the original CrossRef sample rather than relying solely on GROBID's header extraction, which was unreliable for a subset of articles.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-19",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/bmcmed",
+  "dc:source": "BMC Medicine, ISSN 1741-7015, https://bmcmedicine.biomedcentral.com/",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://bmcmedicine.biomedcentral.com/",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2016-01-01/2025-12-31",
+  "dc:rights": "CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+  "dc:provenance": {
+    "pdf_source": "Unpaywall API, with BioMed Central track/pdf fallback",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against original CrossRef sample DOI (2026-06-19)",
+    "sampling": "Stratified random sample, 100 articles/year, seed 20260618",
+    "conversion_date": "2026-06-19"
+  }
+}
