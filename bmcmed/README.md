@@ -54,6 +54,6 @@ See `build.R` for the complete reproducible pipeline.
 ## Loading in R
 
 ```r
-metacheck::papers_download('bmcmed')
+metacheck::papers_load('bmcmed')
 papers <- metacheck::papers_load('bmcmed')
 ```
