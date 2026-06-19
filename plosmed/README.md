@@ -59,6 +59,5 @@ See `build.R` for the complete reproducible pipeline.
 ## Loading in R
 
 ```r
-metacheck::papers_load('plosmed')
 papers <- metacheck::papers_load('plosmed')
 ```
