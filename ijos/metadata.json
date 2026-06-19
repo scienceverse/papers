@@ -1,0 +1,41 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "International Journal of Oral Science - Complete Open-Access Corpus (2009-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "dentistry",
+    "oral science",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A complete corpus of 724 open-access articles published in International Journal of Oral Science (2009-2026), converted to metacheck paperlist objects for validation of AI and text-mining tools. DOIs were verified against the original CrossRef sample rather than relying solely on GROBID's header extraction, which was unreliable for a number of articles.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-19",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/ijos",
+  "dc:source": "International Journal of Oral Science, ISSN 2049-3169, https://www.nature.com/ijos/",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://www.nature.com/ijos/",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2009-01-01/2026-12-31",
+  "dc:rights": "Mostly CC-BY 4.0; some articles CC-BY-NC-ND 3.0/4.0, check individual article (https://creativecommons.org/licenses/by/4.0/, https://creativecommons.org/licenses/by-nc-nd/4.0/)",
+  "dc:provenance": {
+    "pdf_source": "Unpaywall API, with resolved doi.org redirect fallback for articles not yet re-crawled",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against original CrossRef sample DOI (2026-06-19)",
+    "sampling": "Complete corpus (all available open-access articles, not a sample)",
+    "conversion_date": "2026-06-19"
+  }
+}
