@@ -53,6 +53,5 @@ See `build.R` for the complete reproducible pipeline.
 ## Loading in R
 
 ```r
-metacheck::papers_load('jdm')
 papers <- metacheck::papers_load('jdm')
 ```
