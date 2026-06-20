@@ -1,0 +1,41 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Psychological Science - Open-Access Subset Corpus (2014-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "psychology",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A corpus of 270 articles published in Psychological Science, filtered from a larger locally-held collection of 1,903 PDFs down to only those independently confirmed via CrossRef's license metadata to carry an open Creative Commons license (CC-BY or CC-BY-NC), converted to metacheck paperlist objects for validation of AI and text-mining tools. Most Psychological Science articles are not open access (SAGE's default text-and-data-mining license is not a redistributable CC license), so this is a minority subset, not a representative sample of the journal.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-20",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/psychsci_oa",
+  "dc:source": "Psychological Science, ISSN 0956-7976 (print), 1467-9280 (electronic), https://journals.sagepub.com/home/pss",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://journals.sagepub.com/home/pss",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2014-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0 or CC-BY-NC 4.0/3.0, depending on the article -- see manifest.csv license_url column",
+  "dc:provenance": {
+    "pdf_source": "Filtered from a pre-existing local collection of 1,903 Psychological Science PDFs",
+    "license_verification": "Each DOI checked against CrossRef's license field; only creativecommons.org licenses counted as open (SAGE's text-and-data-mining-only license excluded)",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for the license check (2026-06-20)",
+    "sampling": "Not a sample -- all 271 open-access articles found in the source collection (1 later excluded as a non-article erratum notice)",
+    "conversion_date": "2026-06-20"
+  }
+}
