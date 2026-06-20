@@ -1,0 +1,42 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Journal of Cognition Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "cognitive science",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A complete corpus of 447 articles published in Journal of Cognition between 2017 and 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. This is the complete set of retrievable, convertible articles from the journal's full CrossRef-registered output (457 DOIs), not a sample.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-20",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/joc",
+  "dc:source": "Journal of Cognition, ISSN 2514-4820, https://journalofcognition.org/",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://journalofcognition.org/",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 2514-4820",
+    "sampling": "Not a sample -- complete corpus of all retrievable, convertible articles",
+    "pdf_source": "Article landing page HTML scrape (journalofcognition.org/articles/{doi}), Unpaywall's reported PDF URL does not resolve correctly for this journal",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-20)",
+    "quality_audit": "2 inaccessible PDFs excluded, 1 oversized PDF excluded, 5 DOIs corrected, 10 missing titles backfilled from CrossRef",
+    "conversion_date": "2026-06-20"
+  }
+}
