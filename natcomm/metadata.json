@@ -1,0 +1,42 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Nature Communications Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "multidisciplinary science",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A stratified random sample of 1000 articles published in Nature Communications between 2017 and 2026 (100 per year), converted to metacheck paperlist objects for validation of AI and text-mining tools. This is a sample, not a complete corpus -- the journal publishes thousands of articles per year.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-20",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/natcomm",
+  "dc:source": "Nature Communications, ISSN 2041-1723, https://www.nature.com/ncomms/",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://www.nature.com/ncomms/",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0 or CC-BY-NC-ND 4.0, depending on the article -- see manifest.csv",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 2041-1723",
+    "sampling": "100 articles per year, stratified random sample, seed 20260620",
+    "pdf_source": "Unpaywall API with publisher-slug fallback via doi.org redirect resolution",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-20)",
+    "quality_audit": "1 addendum notice replaced, 1 garbled DOI corrected, 22 missing titles backfilled from CrossRef",
+    "conversion_date": "2026-06-20"
+  }
+}
