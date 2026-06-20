@@ -1,0 +1,42 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Journal of Sports Science and Medicine - Random Sample Corpus (2014-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "sports science",
+    "sports medicine",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A random sample of 1,000 open-access articles published in the Journal of Sports Science and Medicine (2014-2026), converted to metacheck paperlist objects for validation of AI and text-mining tools. CrossRef's index for this journal is sparse before ~2021, so articles were discovered by crawling the journal's own site directory structure; 434 papers have a verified CrossRef DOI and title, the remaining 566 have title/author metadata from GROBID's own PDF extraction only (see manifest.csv title_source column).",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-20",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/jssm",
+  "dc:source": "Journal of Sports Science and Medicine, ISSN 1303-2968, https://jssm.org/",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://jssm.org/",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2014-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0 or CC-BY-NC-ND 4.0, depending on the article",
+  "dc:provenance": {
+    "pdf_source": "Direct crawl of jssm.org/volume{N}/iss{1-4}/cap/ directory listings (volumes 13-25)",
+    "doi_reconstruction": "DOI guessed from volume->year mapping and PDF start page, verified against CrossRef where possible (434/1000 confirmed)",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "title_source": "CrossRef where DOI confirmed (434 papers); GROBID PDF header extraction otherwise (566 papers)",
+    "sampling": "Random sample of 1000 from ~1132 discovered candidates, seed 20260620",
+    "conversion_date": "2026-06-20"
+  }
+}
