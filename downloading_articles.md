@@ -1012,3 +1012,58 @@ If several iterations of fixing-and-relaunching the same script happen
 in a short window, it's worth pausing to explicitly enumerate every
 background task ID started so far for that file and confirm each
 one's actual status before doing the final, authoritative run.
+## `build.R` must be genuinely self-contained, not a narrative pointing at scripts you never share
+
+`build.R` is the one artifact in this repo whose entire purpose is
+reproducibility -- it's supposed to let someone else regenerate the
+corpus from scratch. It is easy to violate this without noticing,
+because the broken version still *reads* like a complete pipeline:
+
+```r
+# Phase 2: retry      - see corpus_retry_missing.R for full implementation
+# source("corpus_retry_missing.R")
+```
+
+This looks like documentation of a real step, and the corpus genuinely
+was built this way -- but if `corpus_retry_missing.R` only ever existed
+as a one-off scratch file in your local working directory and was
+never committed to the repo, anyone who clones the repo and runs
+`build.R` hits a missing-file error (or, worse, the commented-out
+`source()` line means it silently does nothing and the resulting
+corpus is short). This bug shipped in 7 of 17 corpora in this
+repository before being caught -- it is not an edge case, it is the
+default failure mode of building a corpus interactively across many
+small scratch scripts and only writing up the "real" `build.R`
+afterward as a summary.
+
+**Before publishing a corpus's `build.R`, grep it for any filename
+ending in `.R` other than its own** (`grep -oE '[a-z_0-9]+\.R' build.R
+| grep -v build.R`), and for every hit, confirm that file is either:
+(a) inlined directly into `build.R` as a callable function, or (b)
+actually committed alongside `build.R` in the same corpus folder. A
+comment that *describes* what a missing script did is not a
+substitute for the script's actual code -- if the original scratch
+script is gone, reconstruct the logic from the README's "Known gaps"
+narrative (which usually describes the fix in enough detail to
+rewrite it) rather than leaving the comment as the only record.
+
+**The practical pattern that avoids this entirely**: structure
+`build.R` as a set of named phase functions (`phase1_download()`,
+`phase2_retry_missing()`, `resample_replacement(id, year)`, etc.)
+defined in the same file, with a `# == Run ==` comment block at the
+bottom showing the call sequence actually used (commented out, since
+some phases are conditional on what the previous phase found missing).
+This way the file is simultaneously the full implementation and the
+record of what was actually run -- there's no separate "real" script
+that can drift out of sync with or never make it into the repo.
+
+## Audit existing corpora for this same gap before assuming a new one is the only risk
+
+This bug is retroactive, not just a one-time mistake to avoid going
+forward -- any corpus published before this lesson was learned should
+be checked. The check is cheap: `grep -oE '\b[a-z_0-9]+\.R\b'
+{corpus}/build.R | sort -u | grep -v '^build\.R$'`, then for each hit,
+confirm the file actually exists somewhere in the repo (`find . -name
+'<hit>'` from the repo root). If a hit doesn't resolve to a real,
+committed file, the corpus's `build.R` is not actually reproducible
+regardless of how complete it looks at a glance.
