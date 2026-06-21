@@ -917,3 +917,98 @@ whether the stuck items share an identifiable structural property
 (same DOI shape, same publication date range, same response size) --
 genuine API flakiness doesn't correlate with input structure; a code
 bug usually does.
+## A stale background job can clobber a freshly-rebuilt RDS hours later -- check for orphaned jobs before trusting a file's contents
+
+A long-running GROBID-conversion-and-assemble script (`elife_convert.R`,
+which both converts PDFs *and* overwrites the corpus `.rds` at the end)
+was started in the background early in a session, presumed finished or
+abandoned, and forgotten about while other fixes were made by hand
+(duplicate-DOI cleanup, DOI corrections, manifest rebuilds). The stale
+job was still running. It finished much later, in the middle of
+unrelated work, and silently overwrote the carefully-cleaned `.rds`
+with its own stale, smaller, pre-fix version -- with no error, no
+warning, just a background-task-completion notification that looked
+routine.
+
+**Any script that writes to a shared output file (the corpus `.rds`,
+`sample.csv`, a manifest) should never be left running unaccounted for
+once you start manually patching the same file by hand.** Before
+trusting a file's row/paper count after a sequence of manual fixes,
+check `ps aux` (or equivalent) for any process that might still be
+mid-run against that same output path, especially after a long
+multi-step debugging session where several variants of "the convert
+script" were launched and not all of their outcomes were tracked. If
+in doubt, kill or wait out every job touching that file before doing
+the final rebuild, and do the final, authoritative version as one
+clean, deliberate run -- not as one more increment on top of however
+many background jobs happen to still be alive.
+
+## A resample/dedup script must normalize DOI versions before comparing -- "already in the sample" needs the same normalization as everywhere else
+
+A script resampling replacements for excluded slots checked
+`!(pool$doi %in% existing_dois)` to avoid picking an article that was
+already in the corpus. This compares exact DOI strings. For a journal
+that registers a "Reviewed Preprint" version under a *different* DOI
+than the canonical article (`10.7554/eLife.92805` vs
+`10.7554/eLife.92805.3` -- both real, registered, resolving DOIs for
+the same underlying paper), this check missed the collision entirely:
+the resampled "replacement" was, in fact, a duplicate of an article
+already in the sample, just registered under the other DOI variant.
+The corpus briefly contained the same paper twice.
+
+Any DOI-based duplicate/already-sampled check needs to normalize away
+known version-suffix variation *before* comparing, not just compare
+raw DOI strings -- the same normalization already needed for URL
+construction (see the "multiple incompatible DOI formats" lesson
+above) applies equally to deduplication logic. If you've already
+written a `normalize_article_num()` helper for one purpose in a
+script, reuse it for every comparison involving DOIs in that script,
+not just the one that prompted writing it.
+
+## Disk-full mid-write doesn't always fail cleanly -- and the partial file left behind isn't safe to trust
+
+A 1000-file PDF zip (4.5GB) being written with PowerShell's
+`Compress-Archive` ran the host filesystem out of space mid-write. The
+write didn't simply fail and stop: `Compress-Archive` itself errored
+out (`There is not enough space on the disk`), but **the partial
+output file remained on disk and, in this instance, a separate
+already-running background invocation of the same command kept writing
+to it independently afterward**, growing it past 4GB over several more
+minutes after the "failure" was already reported -- consuming freed
+disk space again and producing a file that `zipfile.BadZipFile: File
+is not a zip file` correctly rejected as corrupt once finally checked.
+
+Lessons: (1) after any "disk full" error, check `df -h` immediately and
+don't assume the operation actually stopped -- check whether the
+process or any background sibling of it is still alive and still
+writing, via process list and by watching the target file's size for a
+few seconds (stable size across repeated checks = actually done; still
+growing = still running). (2) Never treat a large binary artifact
+(zip, RDS) as trustworthy just because it exists on disk with a
+plausible-looking size after *any* error was reported during its
+creation -- verify it opens/parses correctly (`zipfile.ZipFile(...)`,
+`readRDS(...)`) before using it for anything, especially before
+uploading it as a release asset. (3) Before any large zip/compress
+operation, check free disk space against at least 2-3x the expected
+output size up front, rather than discovering the shortfall mid-write.
+
+## Background jobs that "complete" can still be invisible to you -- track what you actually launched, not what you assume finished
+
+Across a single long working session, several variants of essentially
+the same conversion/zip/resample script were launched in the
+background (the script got fixed and relaunched multiple times as bugs
+were found), and it became easy to lose track of which background task
+IDs were genuinely done, which had been superseded, and which were
+silently still running against stale inputs. This directly caused both
+the RDS-clobbering incident and the runaway disk-filling zip above.
+
+When relaunching a fixed version of a script that does the same job as
+one already running or recently launched, explicitly account for the
+previous instance first (confirm it finished via its actual task
+notification, or confirm via `ps aux` that nothing matching it is
+still alive) before starting the new one -- don't just launch the
+fix and assume the old attempt is irrelevant because you "moved on."
+If several iterations of fixing-and-relaunching the same script happen
+in a short window, it's worth pausing to explicitly enumerate every
+background task ID started so far for that file and confirm each
+one's actual status before doing the final, authoritative run.
