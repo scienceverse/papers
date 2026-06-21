@@ -1,0 +1,43 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "i-Perception Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "vision science",
+    "perception",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A stratified random sample of 496 articles published in i-Perception between 2017 and 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. i-Perception is a fully open-access SAGE journal.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-21",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/iperc",
+  "dc:source": "i-Perception, E-ISSN 2041-6695, https://journals.sagepub.com/home/ipe",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://journals.sagepub.com/home/ipe",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 2041-6695",
+    "sampling": "100 articles per year (target), stratified random sample, seed 20260620, reduced in later years by an unresolved intermittent API failure",
+    "pdf_source": "journals.sagepub.com direct download (with Sec-CH-UA Client Hints headers to avoid a Cloudflare challenge) and Europe PMC for a subset",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-21)",
+    "quality_audit": "4 non-article notices dropped, 115 duplicate-DOI bookkeeping rows resolved, 6 garbled DOIs corrected, 2 missing titles backfilled from CrossRef, 9 PDFs permanently excluded after failing GROBID conversion twice (8 oversized, 1 malformed)",
+    "conversion_date": "2026-06-21"
+  }
+}
