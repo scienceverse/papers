@@ -1,0 +1,42 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Frontiers in Psychology Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "psychology",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A stratified random sample of 1000 articles published in Frontiers in Psychology between 2017 and 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. Frontiers in Psychology is a fully open-access journal.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-21",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/frontiers",
+  "dc:source": "Frontiers in Psychology, ISSN 1664-1078, https://www.frontiersin.org/journals/psychology",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://www.frontiersin.org/journals/psychology",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 1664-1078",
+    "sampling": "100 articles per year, stratified random sample, 2017-2026, target fully met after gap-filling resamples",
+    "pdf_source": "Unpaywall OA check, Europe PMC PMCID lookup, europepmc.org direct download",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-21)",
+    "quality_audit": "60 garbled/missing GROBID-extracted DOIs corrected from verified CrossRef sample DOI, 4 missing titles backfilled from CrossRef, 0 duplicates, 0 thin-content papers, 0 slipped non-articles",
+    "conversion_date": "2026-06-21"
+  }
+}
