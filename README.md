@@ -13,6 +13,15 @@ literature.
 All papers in this repository are open-access and are shared in accordance
 with their original licenses (typically CC-BY 4.0).
 
+**17 corpora, 13,636 papers, as of 2026-06-21.**
+
+If you are building a new corpus for this repository, read
+[downloading_articles.md](downloading_articles.md) first -- it documents
+dozens of lessons learned (publisher-specific access patterns, GROBID
+conversion pitfalls, common bugs in DOI/sampling logic, and the release
+checklist) from building the corpora below. Skipping it means re-discovering
+the same problems from scratch.
+
 ---
 
 ## Repository organisation
@@ -49,10 +58,30 @@ If you need a format that is not yet available, please
 
 ## Available corpora
 
+17 corpora, 13,636 papers in total.
+
 | Corpus | Journal | Papers | Years | License |
 |--------|---------|--------|-------|---------|
-| [collabra](collabra/) | Collabra: Psychology | 749 | 2017-2026 | CC-BY 4.0 |
+| [bmcmed](bmcmed/) | BMC Medicine | 1000 | 2016-2025 | CC-BY 4.0 |
+| [bmcoral](bmcoral/) | BMC Oral Health | 1000 | 2016-2025 | Mostly CC-BY 4.0 |
+| [collabra](collabra/) | Collabra: Psychology | 748 | 2017-2026 | CC-BY 4.0 |
+| [elife](elife/) | eLife | 1000 | 2017-2026 | CC-BY 4.0 |
+| [frontiers](frontiers/) | Frontiers in Psychology | 1000 | 2017-2026 | CC-BY 4.0 |
+| [ijos](ijos/) | International Journal of Oral Science | 724 | 2009-2026 | Mostly CC-BY 4.0 |
+| [iperc](iperc/) | i-Perception | 496 | 2017-2026 | CC-BY 4.0 |
 | [jdm](jdm/) | Judgment and Decision Making | 855 | 2006-2022 | CC-BY 4.0 |
+| [joc](joc/) | Journal of Cognition | 447 | 2017-2026 | CC-BY 4.0 |
+| [jssm](jssm/) | Journal of Sports Science and Medicine | 1000 | 2014-2026 | CC-BY 4.0 or CC-BY-NC-ND 4.0 |
+| [natcomm](natcomm/) | Nature Communications | 1000 | 2017-2026 | Mostly CC-BY 4.0 |
+| [openmind](openmind/) | Open Mind | 293 | 2017-2026 | CC-BY 4.0 |
+| [plosbio](plosbio/) | PLOS Biology | 1000 | 2016-2025 | CC-BY 4.0 or CC0 |
+| [plosmed](plosmed/) | PLOS Medicine | 1000 | 2016-2025 | CC-BY 4.0 or CC0 |
+| [plosone](plosone/) | PLOS ONE | 1000 | 2016-2025 | CC-BY 4.0 or CC0 |
+| [psychsci_oa](psychsci_oa/) | Psychological Science (OA subset) | 270 | 2014-2026 | CC-BY 4.0 or CC-BY-NC |
+| [scan](scan/) | Social Cognitive and Affective Neuroscience | 803 | 2017-2026 | Mixed CC-BY variants |
+
+Each corpus's `README.md` documents its specific coverage, sampling method
+(complete corpus vs. stratified random sample), and known gaps/exclusions.
 
 ---
 
