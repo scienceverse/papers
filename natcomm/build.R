@@ -164,10 +164,62 @@ for (i in seq_len(nrow(sampled))) {
 }
 message("PDFs on disk: ", length(list.files(PDF_DIR, pattern = "\\.pdf$")), " / ", nrow(sampled))
 
-# NOTE: at this point in the actual build, 18 in-press 2026 articles and 7
-# GROBID-conversion failures (6 oversized PDFs, 1 transient error) were
-# each replaced with a fresh same-year draw -- see natcomm_replace_missing.R
-# and natcomm_replace_oversized.R for the resample-and-replace logic.
+# == Phase 1b: replace specific article_ids with fresh same-year draws =====
+# Used for: 18 in-press 2026 articles (PDF not yet rendered on
+# nature.com, download failed every route), and later (after Phase 2)
+# for 7 GROBID-conversion failures (6 oversized PDFs, 1 transient
+# error) and 1 article that turned out to be an "Addendum: ..." notice
+# not caught by the title filter. Pass the article_ids to replace and
+# the years they belong to (named vector: names = article_id, values
+# = year).
+
+replace_articles <- function(bad_ids_by_year) {
+  sampled <- read.csv(SAMPLE_CSV, colClasses = "character")
+  sampled <- sampled[!(sampled$article_id %in% names(bad_ids_by_year)), ]
+  for (id in names(bad_ids_by_year)) unlink(file.path(PDF_DIR, paste0("natcomm.", id, ".pdf")))
+
+  n_found <- 0
+  for (yr in sort(unique(bad_ids_by_year))) {
+    n_needed <- sum(bad_ids_by_year == yr)
+    items <- fetch_year(yr)
+    pool <- do.call(rbind, lapply(items, function(it) data.frame(doi = it$DOI %||% NA_character_, title = (it$title[[1]] %||% NA_character_), year = yr, stringsAsFactors = FALSE)))
+    pool <- pool[!duplicated(pool$doi) & !is.na(pool$doi), ]
+    pool <- pool[!is_nonarticle(pool$title), ]
+    pool <- pool[!(pool$doi %in% sampled$doi), ]
+    pool$article_id <- gsub("[^A-Za-z0-9]", "", sub("^10\\.1038/", "", pool$doi))
+    set.seed(SEED + yr)
+    pool <- pool[sample.int(nrow(pool)), ]
+
+    found_this_year <- 0
+    for (i in seq_len(nrow(pool))) {
+      if (found_this_year >= n_needed) break
+      doi <- pool$doi[i]; art_id <- pool$article_id[i]
+      dest <- file.path(PDF_DIR, paste0("natcomm.", art_id, ".pdf"))
+
+      pdf_url <- tryCatch({
+        resp <- request(paste0("https://api.unpaywall.org/v2/", doi, "?email=", EMAIL)) |>
+          req_timeout(15) |> req_error(is_error = \(r) FALSE) |> req_perform()
+        if (resp_status(resp) == 200) resp_body_json(resp)[["best_oa_location"]][["url_for_pdf"]] else NULL
+      }, error = \(e) NULL)
+      ok <- FALSE
+      if (!is.null(pdf_url) && nzchar(pdf_url)) ok <- download_pdf(pdf_url, dest)
+      if (!ok) {
+        slug <- resolve_nature_slug(doi)
+        if (!is.na(slug)) ok <- download_pdf(paste0("https://www.nature.com/articles/", slug, ".pdf"), dest)
+      }
+      if (ok) {
+        new_row <- data.frame(doi = doi, title = pool$title[i], year = yr, article_id = art_id)
+        sampled <- rbind(sampled, new_row[, colnames(sampled)])
+        found_this_year <- found_this_year + 1
+        n_found <- n_found + 1
+      }
+      Sys.sleep(1)
+    }
+    message("Year ", yr, ": found ", found_this_year, "/", n_needed, " replacements")
+  }
+  write.csv(sampled, SAMPLE_CSV, row.names = FALSE)
+  message("Total replacements found: ", n_found, "/", length(bad_ids_by_year))
+}
 
 # == Phase 2: convert =============================================================
 
@@ -206,11 +258,35 @@ message("Coverage: ", sum(manifest$in_rds), "/", nrow(manifest))
 
 # == Phase 3: cleanup =============================================================
 # 1 article was an "Addendum: ..." notice not caught by the title filter
-# (replaced with a fresh same-year draw); 1 article had a garbled
-# GROBID-extracted DOI (a "Matters Arising" commentary -- corrected from
-# the verified CrossRef sample DOI); 22 articles had real, substantial
-# body text but no GROBID-extracted title (backfilled from CrossRef's
-# bibliographic title for that DOI). See natcomm_cleanup.R for the full
-# implementation of this phase.
+# (replaced with a fresh same-year draw via replace_articles(), then
+# Phase 2 rerun); 1 article had a garbled GROBID-extracted DOI (a
+# "Matters Arising" commentary -- corrected from the verified CrossRef
+# sample DOI); 22 articles had real, substantial body text but no
+# GROBID-extracted title (backfilled from CrossRef's bibliographic
+# title for that DOI).
 
-message("Build complete: ", length(readRDS(RDS_OUT)), " papers in ", RDS_OUT)
+papers  <- readRDS(RDS_OUT)
+sampled <- read.csv(SAMPLE_CSV, colClasses = "character")
+fnames  <- sapply(papers, function(p) basename(p$info$file_name))
+ids     <- sub("^natcomm\\.", "", fnames) |> sub("\\.xml$", "", x = _)
+
+sample_doi   <- setNames(sampled$doi, sampled$article_id)
+sample_title <- setNames(sampled$title, sampled$article_id)
+
+n_doi_fixed <- n_title_fixed <- 0
+for (i in seq_along(papers)) {
+  expected_doi <- sample_doi[[ids[i]]]
+  actual_doi   <- papers[[i]]$info$doi
+  if (is.null(actual_doi) || !nzchar(actual_doi) || !identical(tolower(actual_doi), tolower(expected_doi %||% ""))) {
+    papers[[i]]$info$doi <- expected_doi
+    n_doi_fixed <- n_doi_fixed + 1
+  }
+  if (!nzchar(papers[[i]]$info$title %||% "")) {
+    papers[[i]]$info$title <- sample_title[[ids[i]]]
+    n_title_fixed <- n_title_fixed + 1
+  }
+}
+message("Corrected DOI for ", n_doi_fixed, " papers; backfilled title for ", n_title_fixed)
+saveRDS(papers, RDS_OUT)
+
+message("Build complete: ", length(papers), " papers in ", RDS_OUT)
