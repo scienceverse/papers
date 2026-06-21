@@ -1,0 +1,43 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Social Cognitive and Affective Neuroscience (SCAN) Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "cognitive neuroscience",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A stratified random sample of 803 articles published in Social Cognitive and Affective Neuroscience between 2017 and 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. SCAN is a hybrid journal; each article's open-access status was verified individually via Unpaywall rather than assumed.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-21",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/scan",
+  "dc:source": "Social Cognitive and Affective Neuroscience, ISSN 1749-5016, https://academic.oup.com/scan",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://academic.oup.com/scan",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0, CC-BY-NC 4.0, CC-BY-NC-ND 4.0, or public domain, depending on the article -- see manifest.csv",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 1749-5016",
+    "sampling": "100 articles per year (target), stratified random sample, seed 20260620, reduced in some years by unresolved oversized-PDF and non-article exclusions",
+    "oa_verification": "Unpaywall API, checked per article (hybrid journal, not assumed open access)",
+    "pdf_source": "Europe PMC (academic.oup.com's direct PDF host is Cloudflare-protected and blocks automated downloads)",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-21)",
+    "quality_audit": "9 non-article notices replaced (8 of 9 successfully), 50 oversized PDFs excluded (14 of 50 replaced), 109 garbled DOIs corrected, 4 missing titles backfilled from CrossRef",
+    "conversion_date": "2026-06-21"
+  }
+}
