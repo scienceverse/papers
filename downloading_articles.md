@@ -303,6 +303,13 @@ article") rather than overclaiming uniformity.
     against the RDS's actual paper list (`setequal()` check) -- not
     "everything currently in the pdf/ folder". Re-verify by inspecting
     the zip's real entries after creation, not just before.
+13. Spot-check that downloaded PDFs are the publisher's version of
+    record, not a reformatted substitute -- a `%PDF-` header check only
+    confirms "this is a PDF," not "this is the right PDF." Open a few
+    real files (especially from any new/fallback download route) and
+    check they look like a typeset journal article, not a one-column
+    reflow or a wrong/different article.
+
 ## When a publisher's direct PDF host is bot-protected: try Europe PMC
 
 Some publishers' own PDF hosts are protected in ways that block automated
@@ -688,3 +695,91 @@ headers for `Cf-Mitigated`/`Critical-Ch` **before** assuming it's a
 harder block (like Wiley's) that isn't worth pursuing -- this specific
 signature has a known, cheap fix and has now been seen on two unrelated
 publishers using Cloudflare.
+## Always verify the downloaded PDF is the publisher's version of record, not a reformatted substitute
+
+Before accepting any PDF source as the answer for a corpus -- especially a
+fallback/scraped route discovered mid-project -- check that the file
+actually is the publisher's typeset version, not a Word-exported preprint,
+an author manuscript, or some other reformatted stand-in that happens to
+satisfy the `%PDF-` header check. The header check only confirms "this is a
+PDF," not "this is the right PDF." Concretely:
+
+- Prefer Unpaywall's `oa_locations` entries tagged `host_type: publisher`
+  and `version: publishedVersion` over any `repository`/`submittedVersion`
+  copy (already documented above) -- but also **spot-check a few actual
+  downloaded files** by opening them, not just trusting the metadata tag.
+- A publisher's own CDN/landing-page-scrape route (like
+  `elifesciences.org`'s embedded download link, or a Silverchair
+  `article-pdf/doi/...` URL) is generally trustworthy *if* it's coming
+  straight from the publisher's own domain -- but verify the file size and
+  page count look like a real article (a Word-exported single-page PDF or
+  a 5KB file claiming to be a 12-page paper is a red flag) rather than
+  just checking the header bytes.
+- When introducing a new download route mid-corpus (not part of the
+  original, already-verified pipeline), test it on 3-5 real files first:
+  open them, confirm they have proper typeset formatting (running
+  headers/footers, journal-style layout, page numbers in the publisher's
+  format), not a one-column plain-text reflow.
+
+This matters more than it might seem -- a corpus full of correctly-sized,
+correctly-headered PDFs that are actually the *wrong* version (preprint
+instead of VoR, or a different article entirely) would pass every
+automated check in this pipeline and only surface as wrong when someone
+actually reads the content.
+
+## A single-character regex bug silently broke a working download route for an entire corpus
+
+The `elifesciences.org` landing-page-scrape fallback (documented above --
+extracting a `_hash=...`-signed direct PDF link from the article page's
+HTML) looked like an unreliable/intermittent route: roughly 40-90% of
+download attempts failed with `406 Not Acceptable: invalid signature`,
+in a pattern that superficially resembled the already-documented
+"intermittent Unpaywall/Europe PMC failure" issue (random-looking,
+recovered partially on repeated full-script reruns). It was not that --
+it was a single, deterministic bug, and treating it as "the known
+intermittent thing" wasted three full retry passes before it was found.
+
+The actual cause: the regex extracting the signed URL used a character
+class that didn't include `%`:
+
+```r
+# Wrong -- silently truncates the hash if it contains a URL-encoded
+# character (most commonly %3D, the encoded form of "=", which appears
+# whenever the base64 hash has trailing padding)
+regexpr('_hash=[A-Za-z0-9_-]+', html)
+
+# Right -- allow percent-encoded escapes inside the hash too
+regexpr('_hash=([A-Za-z0-9_-]|%[0-9A-Fa-f]{2})+', html)
+```
+
+A base64-encoded value ending in `=` padding gets URL-encoded to `%3D` in
+an `href` attribute. A character class of `[A-Za-z0-9_-]+` stops matching
+at the `%`, silently returning a hash that's missing its last 1-3
+characters -- which is enough to fail server-side signature validation,
+producing a clean, deterministic 406 every single time for that
+specific URL, indistinguishable at a glance from a flaky/intermittent
+failure (since *which* DOIs are affected looks essentially random --
+it depends on whether that particular hash happened to need padding).
+
+**The tell that should have caught this faster**: testing the *exact
+same* extracted URL repeatedly (not re-extracting a fresh one each time)
+gave a consistent 100% failure rate, not a mix of successes and
+failures. True intermittent-API flakiness (the Unpaywall/Europe PMC
+pattern) fails some fraction of attempts and succeeds on others for the
+*identical* request. A bug that fails the *same* request every single
+time is a deterministic bug in your own code or in how the request is
+built, not server-side flakiness -- don't reach for "just retry it
+more" without first confirming the failure is actually nondeterministic.
+
+## Inspect the raw extracted URL/string before assuming a regex worked correctly
+
+When scraping a value out of HTML (a signed URL, a CSRF token, an
+embedded ID), printing "extraction succeeded: TRUE/FALSE" is not enough
+verification -- a regex can match *something* and still silently return
+a truncated or wrong substring. Print the actual extracted value and
+compare it character-for-character against the raw HTML source (or
+against a working example obtained another way, e.g. via the browser's
+view-source) before trusting it in a pipeline, especially for any
+extracted value that's used as-is in a follow-up request (a hash, a
+token, an ID) where a 1-character truncation produces a clean failure
+response rather than an obviously-malformed request.
