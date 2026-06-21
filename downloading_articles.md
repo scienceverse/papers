@@ -293,3 +293,252 @@ article") rather than overclaiming uniformity.
     extracted text, remaining non-article titles, duplicate DOIs/article
     IDs -- each of these has independently turned up real problems that a
     30-60 paper sample check missed.
+## When a publisher's direct PDF host is bot-protected: try Europe PMC
+
+Some publishers' own PDF hosts are protected in ways that block automated
+downloads even for genuinely open-access articles (e.g. OUP's
+`academic.oup.com` returns a Cloudflare JS challenge page, "Just a
+moment...", instead of the PDF). When this happens, check whether the
+article has a deposit in Europe PMC -- many journals (especially in
+biomedicine and cognitive neuroscience, where NIH/Wellcome-funded authors
+are common) are deposited there independently of the publisher's own site,
+and Europe PMC's PDF host has no bot protection:
+
+```r
+get_pmcid <- function(doi) {
+  resp <- httr2::request("https://www.ebi.ac.uk/europepmc/webservices/rest/search") |>
+    httr2::req_url_query(query = paste0("DOI:", doi), format = "json") |>
+    httr2::req_perform()
+  res <- httr2::resp_body_json(resp)$resultList$result
+  if (length(res) == 0 || !identical(res[[1]]$hasPDF, "Y")) return(NULL)
+  res[[1]]$pmcid
+}
+# then download from:
+# https://europepmc.org/articles/{PMCID}?pdf=render
+```
+
+This is not a universal fallback -- deposit coverage varies a lot by
+journal and by year. It worked extremely well for one journal (~97%
+success once OA was confirmed) but covered under 10% of a hybrid
+journal's most recent few years, where deposits hadn't caught up yet. Treat it as
+"try this, but verify the actual yield before assuming it closes the
+gap" rather than a guaranteed substitute for the publisher's own host.
+
+## Cloudflare can block a non-browser HTTP client even with a browser User-Agent
+
+A request that gets a Cloudflare "Just a moment..." / 403 challenge page
+isn't necessarily being rate-limited or IP-blocked -- check the response
+headers for `cf-mitigated: challenge` and `critical-ch: Sec-CH-UA-...`.
+Cloudflare can require the **Client Hints** headers a real browser sends
+alongside a Chrome `User-Agent` string, and `httr2`'s default request
+doesn't send them, so it gets flagged as a spoofed UA regardless of
+request rate, IP reputation, or session cookies. Confirmed by reproducing
+side-by-side: a plain `curl` request to the exact same URL succeeded
+(different default headers), while the identical URL via `httr2` failed
+with 403 every time -- until matching headers were added:
+
+```r
+httr2::request(url) |>
+  httr2::req_headers(
+    `User-Agent` = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    `Sec-CH-UA` = "\"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\", \"Not=A?Brand\";v=\"99\"",
+    `Sec-CH-UA-Mobile` = "?0",
+    `Sec-CH-UA-Platform` = "\"Windows\""
+  )
+```
+
+This fixed a publisher host that looked completely blocked (100% failure
+after ~70 requests) with zero throttling once the headers were added --
+don't add artificial delays to work around what might actually be a
+header-fingerprinting issue, check the response headers first.
+
+## `colClasses = "character"` is not just for the initial download script
+
+The numeric-coercion bug (long-digit `article_id`/DOI-suffix strings
+silently collapsing to lossy scientific notation under R's default
+`read.csv()` type-guessing) isn't a one-time risk in the original download
+script -- it recurs in **every** later script that reads the same
+`sample.csv` again: resample/replace scripts, orphan-recovery scripts,
+quality-audit scripts. Each of these is a fresh `read.csv()` call and each
+needs `colClasses = "character"` independently; fixing it in one script
+does not fix it in the others. If a later-stage script throws "subscript
+out of bounds" on an `article_id` lookup, or `rbind()` mysteriously merges
+two different articles' data into one row, suspect this first.
+
+## `rbind()` against a bare `data.frame()` fails once real columns exist
+
+Initializing an accumulator as `acc <- data.frame()` and then doing
+`acc <- rbind(acc, new_row)` works fine for the *first* row (R is lenient
+about rbinding into a truly empty 0-row-0-column frame), but if `acc` ever
+needs to skip an iteration and get rbound again while still empty in a
+*later* loop iteration where some other variable already has real columns,
+or if you rbind two independently-built empty frames together at the end,
+you can hit `Error: numbers of columns of arguments do not match`. This
+surfaces especially in resample-by-year loops where a candidate year finds
+zero replacements -- guard every `rbind()` onto a possibly-still-empty
+accumulator:
+
+```r
+if (nrow(new_rows) > 0) acc <- if (nrow(acc) == 0) new_rows else rbind(acc, new_rows)
+```
+
+Also double check that both sides of a final `rbind()` (e.g. merging
+resampled replacement rows back into the main `sampled` data frame) have
+the **same columns in the same order** -- a `sample.csv` that picked up
+extra columns over time (like `is_oa`/`license` added during a hybrid
+journal's OA-checking phase) will not silently align with a replacement
+data frame that only ever had the original 4 columns. Reindex with
+`new_rows <- new_rows[, colnames(acc)]` before the final merge.
+
+## Recovering a DOI from inside a binary PDF when the filename/CSV record is lost or wrong
+
+If a `sample.csv` row gets dropped or corrupted (see the `colClasses` bug
+above) but the PDF itself is still on disk, the DOI is very often
+embedded as plain text inside the PDF's own bytes (in metadata, an
+embedded XML stream, or just visible in a content stream) -- even though
+the file as a whole is binary and not valid UTF-8 text. `rawToChar()` on
+raw PDF bytes throws an "invalid multibyte string" error or
+`regexpr()`/`regmatches()` silently fails to match anything, which looks
+like "no DOI present" but is actually just an encoding failure. Filter to
+printable ASCII bytes before converting to a string:
+
+```r
+extract_doi_from_pdf <- function(path, prefix = "10\\.1177/") {
+  raw <- readBin(path, "raw", n = 200000)
+  printable <- raw
+  printable[!(raw >= as.raw(0x20) & raw <= as.raw(0x7e))] <- as.raw(0x20)
+  txt <- rawToChar(printable)
+  m <- regmatches(txt, regexpr(paste0(prefix, "[0-9]+"), txt))
+  if (length(m) == 0 || !nzchar(m)) NA_character_ else m
+}
+```
+
+Don't reconstruct a DOI by guessing from the filename alone (e.g.
+`paste0("10.1177/", article_id)`) when the article_id itself came from a
+process that touched the numeric-coercion bug -- the filename can be
+off by one or two digits from the real DOI. Extracting straight from the
+PDF's own bytes is more reliable, and only fall back to the filename
+guess if no DOI string is found in the file.
+
+## A "download succeeds but the bibliographic API call after it intermittently fails 60-80% of the time" pattern, with no identified root cause
+
+Across two large corpus builds, a sequence of "check OA via Unpaywall,
+then look up a PMCID via Europe PMC, then download" calls had a high
+failure rate (60-80%) for the second and third steps specifically, in a
+single long-running R session -- while every individual failing call,
+re-tested in isolation seconds later (same DOI, same code, same session
+pattern), succeeded without issue. This was not a rate limit (a 30-request
+rapid-fire burst from a separate shell succeeded 30/30), not a Cloudflare
+block (no challenge page in the response), and not a code bug (the
+identical function works standalone). It was never root-caused.
+
+What helped:
+- A retry-once-after-a-short-pause wrapper around each API call
+  recovered roughly half the gap (yield went from ~10-15% to ~30%).
+- Simply **re-running the entire download script later** (it skips
+  already-downloaded files) recovered most of the remainder -- one
+  corpus went from 351/1000 to 803/1000 on a second full pass with no
+  code changes at all. Whatever the underlying cause, it is not
+  persistent across separate script invocations.
+- Don't assume a low yield from one run is the ceiling for that
+  journal/route -- if the access method is otherwise known to work
+  (confirmed via isolated spot checks), a second full pass is worth
+  trying before concluding the corpus must be published at a reduced size.
+
+## GROBID "Internal Server Error" has (at least) two different causes
+
+A `convert_grobid()` call failing with "Internal Server Error" can mean
+either of two structurally different problems, and they need different
+handling:
+
+1. **The downloaded "PDF" is actually an HTML page** (login wall,
+   cookie-consent redirect, journal homepage) that passed a naive
+   `size > 10000 bytes` check but isn't a real PDF at all. Verify with
+   the `%PDF-` header check described above -- this should be caught at
+   download time, not conversion time, but if it slips through, deleting
+   and re-downloading (or finding an alternate source) fixes it.
+2. **The PDF is a genuinely, structurally valid PDF file** (correct
+   `%PDF-` header, correct `%%EOF` trailer, normal file size -- not
+   oversized) that GROBID nonetheless consistently rejects on every
+   retry, including after a fresh re-download confirms the file itself
+   is fine. This has been seen for a small number of files across
+   several corpora (roughly 1 in several hundred) and has no known fix --
+   treat it as an accepted, documented exclusion (like an oversized PDF),
+   not a bug to keep chasing.
+
+Distinguish the two by inspecting the actual file (header, trailer, size)
+before deciding which path applies -- don't assume every "Internal Server
+Error" is type 1 just because that's the more common cause.
+
+## If the GROBID server seems to have gone down mid-session, check your own network/VPN first
+
+A sudden, total GROBID outage (every request times out with no response
+at all, including a plain `curl .../api/isalive` to the base domain) is
+often not the GROBID server itself -- it's much more likely that the
+machine running the script lost its own internet connection, or a VPN
+connected/disconnected/changed routing. Check basic connectivity to a
+known-reliable host (e.g. `curl -o /dev/null -w "%{http_code}" https://api.crossref.org`)
+before concluding the GROBID endpoint itself is down; if other external
+APIs are also unreachable at the same moment, the problem is local, not
+remote, and no amount of waiting for GROBID specifically will fix it.
+
+## Uploading build artifacts to the papers repo
+
+The pipeline scripts above produce local files (`{corpus}/README.md`,
+`{corpus}/build.R`, `{corpus}/manifest.csv`, `{corpus}/metadata.json`,
+plus the `.rds` and PDF zip(s) that go in a GitHub Release, not a commit).
+The four small text/metadata files are pushed to the repo via the GitHub
+Contents API rather than a normal `git push`, since this pipeline doesn't
+keep a local git clone of `scienceverse/papers` -- it works directly
+against the GitHub API from the `metacheck` working directory instead.
+
+```r
+library(httr2); library(jsonlite)
+
+repo  <- "scienceverse/papers"
+token <- system2("gh", c("auth", "token"), stdout = TRUE)
+b64 <- function(x) gsub("\n", "", openssl::base64_encode(charToRaw(x)))
+
+upload_file <- function(path, content, commit_msg) {
+  url <- paste0("https://api.github.com/repos/", repo, "/contents/", path)
+  existing <- tryCatch(
+    request(url) |>
+      req_headers(Authorization = paste("Bearer", token),
+                  Accept = "application/vnd.github+json") |>
+      req_error(is_error = \(r) FALSE) |> req_perform() |> resp_body_json(),
+    error = \(e) list(sha = NULL)
+  )
+  body <- list(message = commit_msg, content = b64(content))
+  if (!is.null(existing$sha)) body$sha <- existing$sha  # required to overwrite an existing file
+  resp <- request(url) |>
+    req_headers(Authorization = paste("Bearer", token),
+                Accept = "application/vnd.github+json",
+                `Content-Type` = "application/json") |>
+    req_body_raw(toJSON(body, auto_unbox = TRUE)) |>
+    req_method("PUT") |> req_error(is_error = \(r) FALSE) |> req_perform()
+  cat(path, "->", resp_status(resp), "\n")  # 201 = created, 200 = updated
+}
+
+upload_file("{corpus}/README.md", paste(readLines("local_README.md"), collapse = "\n"), "Add {corpus} README")
+```
+
+`gh auth token` reuses the same GitHub CLI authentication already set up
+for `gh release create`, so no separate PAT/secret is needed. The `sha`
+of the existing file (if any) must be included in the PUT body to
+overwrite it -- omitting it when the file already exists produces a 409
+Conflict, not a silent overwrite.
+
+For the `.rds` and PDF zip(s), use a GitHub Release instead (these are
+binary/large and don't belong in a git-tracked file):
+
+```bash
+gh release create {corpus}-$(date +%Y-%m-%d) --repo scienceverse/papers \
+  --title "{Corpus} corpus v1" --notes "..." \
+  {corpus}.rds {corpus}_pdf.zip   # or _pdf_part1.zip _pdf_part2.zip if split
+```
+
+After creating the release, verify by downloading the `.rds` fresh to a
+temp directory (`gh release download {tag} --repo scienceverse/papers
+--pattern "{corpus}.rds"`) and confirming `length()` and `class()` match
+expectations -- this catches a corrupted upload or a wrong asset before
+calling the corpus done.
