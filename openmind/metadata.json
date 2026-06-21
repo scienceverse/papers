@@ -1,0 +1,42 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Open Mind Corpus (2017-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "cognitive science",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A complete corpus of 293 articles published in Open Mind between 2017 and 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. Open Mind is a fully open-access MIT Press journal.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-21",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/openmind",
+  "dc:source": "Open Mind, E-ISSN 2470-2986, https://direct.mit.edu/opmi",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://direct.mit.edu/opmi",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2017-01-01/2026-12-31",
+  "dc:rights": "CC-BY 4.0",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 2470-2986 (complete corpus, no sampling)",
+    "sampling": "none -- all 295 CrossRef-registered journal-article records, 293 retained after excluding 1 non-article notice and 1 oversized PDF",
+    "pdf_source": "Unpaywall best_oa_location (direct.mit.edu, with Sec-CH-UA Client Hints headers and retry-with-backoff to mitigate a probabilistic Cloudflare check), Europe PMC for a subset, 1 article recovered via landing-page PDF-link scrape",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-21)",
+    "quality_audit": "1 non-article notice (bare 'Erratum' title) dropped, 3 garbled DOIs corrected, 1 oversized PDF excluded, 0 duplicates, 0 thin-content papers",
+    "conversion_date": "2026-06-21"
+  }
+}
