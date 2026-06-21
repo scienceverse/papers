@@ -144,10 +144,40 @@ for (i in seq_len(nrow(sampled))) {
 }
 message("PDFs on disk: ", length(list.files(PDF_DIR, pattern = "\\.pdf$")), " / ", nrow(sampled))
 
-# NOTE: at this point in the actual build, joc.84's PDF returned a
-# persistent GCS AccessDenied error (excluded), and joc.136's PDF was
-# instead recovered via its Europe PMC deposit (PMC7792471) -- see
-# the download retry logic in _stuff/joc_download.R.
+# == Phase 1b: Europe PMC fallback for landing pages with a broken/missing ==
+# == PDF link =================================================================
+# joc.84's PDF returned a persistent GCS AccessDenied error directly
+# from the publisher's storage bucket (not transient -- excluded, no
+# replacement, since this is a complete corpus). joc.136 had the same
+# broken landing-page link but was recovered via its Europe PMC
+# deposit instead. Call this for any DOI still missing after Phase 1.
+
+recover_via_europepmc <- function(doi, art_id) {
+  dest <- file.path(PDF_DIR, paste0("joc.", art_id, ".pdf"))
+  resp <- tryCatch(
+    request("https://www.ebi.ac.uk/europepmc/webservices/rest/search") |>
+      req_url_query(query = paste0("DOI:", doi), format = "json") |>
+      req_timeout(15) |> req_error(is_error = \(r) FALSE) |> req_perform(),
+    error = \(e) NULL
+  )
+  if (is.null(resp) || resp_status(resp) != 200) return(FALSE)
+  res <- resp_body_json(resp)$resultList$result
+  if (length(res) == 0 || !identical(res[[1]]$hasPDF, "Y")) return(FALSE)
+  pmcid <- res[[1]]$pmcid
+  ok <- tryCatch(
+    request(paste0("https://europepmc.org/articles/", pmcid, "?pdf=render")) |>
+      req_headers(`User-Agent` = "Mozilla/5.0") |>
+      req_timeout(30) |> req_error(is_error = \(r) FALSE) |>
+      req_perform(path = dest) |> resp_status() == 200,
+    error = \(e) FALSE
+  )
+  if (ok) {
+    header <- readBin(dest, "raw", n = 5)
+    if (rawToChar(header) != "%PDF-") ok <- FALSE
+  }
+  if (!ok) unlink(dest)
+  ok
+}
 
 # == Phase 2: convert =============================================================
 
@@ -192,7 +222,29 @@ message("Coverage: ", sum(manifest$in_rds), "/", nrow(manifest))
 # up an unrelated journal's DOI from a reference citation); overwritten
 # from the verified CrossRef sample DOI. 10 articles had real, substantial
 # body text but no GROBID-extracted title; backfilled from CrossRef's
-# bibliographic title for that DOI. See joc_cleanup.R for the full
-# implementation of this phase.
+# bibliographic title for that DOI.
 
-message("Build complete: ", length(readRDS(RDS_OUT)), " papers in ", RDS_OUT)
+papers <- readRDS(RDS_OUT)
+fnames <- sapply(papers, function(p) basename(p$info$file_name))
+ids    <- sub("^joc\\.", "", fnames) |> sub("\\.xml$", "", x = _)
+
+sample_doi   <- setNames(sampled$doi, sampled$article_id)
+sample_title <- setNames(sampled$title, sampled$article_id)
+
+n_doi_fixed <- n_title_fixed <- 0
+for (i in seq_along(papers)) {
+  expected_doi <- sample_doi[[ids[i]]]
+  actual_doi   <- papers[[i]]$info$doi
+  if (is.null(actual_doi) || !nzchar(actual_doi) || !identical(tolower(actual_doi), tolower(expected_doi %||% ""))) {
+    papers[[i]]$info$doi <- expected_doi
+    n_doi_fixed <- n_doi_fixed + 1
+  }
+  if (!nzchar(papers[[i]]$info$title %||% "")) {
+    papers[[i]]$info$title <- sample_title[[ids[i]]]
+    n_title_fixed <- n_title_fixed + 1
+  }
+}
+message("Corrected DOI for ", n_doi_fixed, " papers; backfilled title for ", n_title_fixed)
+saveRDS(papers, RDS_OUT)
+
+message("Build complete: ", length(papers), " papers in ", RDS_OUT)
