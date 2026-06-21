@@ -1,0 +1,44 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Ecology and Evolution Corpus (2011-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "ecology",
+    "evolutionary biology",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A stratified random sample of 1,543 articles published in Ecology and Evolution between 2011 and 2026, converted to metacheck paperlist objects for validation of AI and text-mining tools. Ecology and Evolution is a fully open-access Wiley journal; Wiley's own PDF host is blocked by Cloudflare bot protection, so PDFs were retrieved via each article's Europe PMC deposit instead.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-06-21",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/ece3",
+  "dc:source": "Ecology and Evolution, ISSN 2045-7758, https://onlinelibrary.wiley.com/journal/20457758",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://onlinelibrary.wiley.com/journal/20457758",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2011-01-01/2026-12-31",
+  "dc:rights": "Mixed CC-BY 4.0, CC-BY 3.0, and CC-BY-NC 3.0, depending on the article -- see manifest.csv",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 2045-7758",
+    "sampling": "100 articles per year (target), stratified random sample, seed 20260621, reduced in some years by download failures and one excluded non-article notice",
+    "oa_verification": "Unpaywall API, checked per article (fully open-access journal; all 1,579 sampled articles confirmed is_oa: TRUE)",
+    "pdf_source": "Europe PMC (onlinelibrary.wiley.com is Cloudflare-protected and blocks automated downloads)",
+    "conversion_tool": "GROBID 0.9",
+    "conversion_endpoint": "https://grobid.work.abed.cloud",
+    "paperlist_tool": "metacheck::grobid_to_bibr()",
+    "doi_matching": "Verified against CrossRef DOI used for sampling (2026-06-21)",
+    "quality_audit": "1 mistyped non-article notice replaced (empty-title erratum), 11 oversized PDFs excluded, 34 garbled DOIs corrected, 10 missing titles backfilled from CrossRef, two full reruns of the download script to recover intermittent API failures (83% -> 98.4% yield)",
+    "conversion_date": "2026-06-21"
+  }
+}

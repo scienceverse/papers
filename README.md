@@ -13,7 +13,7 @@ literature.
 All papers in this repository are open-access and are shared in accordance
 with their original licenses (typically CC-BY 4.0).
 
-**17 corpora, 13,636 papers, as of 2026-06-21.**
+**18 corpora, 15,179 papers, as of 2026-06-21.**
 
 If you are building a new corpus for this repository, read
 [downloading_articles.md](downloading_articles.md) first -- it documents
@@ -58,13 +58,14 @@ If you need a format that is not yet available, please
 
 ## Available corpora
 
-17 corpora, 13,636 papers in total.
+18 corpora, 15,179 papers in total.
 
 | Corpus | Journal | Papers | Years | License |
 |--------|---------|--------|-------|---------|
 | [bmcmed](bmcmed/) | BMC Medicine | 1000 | 2016-2025 | CC-BY 4.0 |
 | [bmcoral](bmcoral/) | BMC Oral Health | 1000 | 2016-2025 | Mostly CC-BY 4.0 |
 | [collabra](collabra/) | Collabra: Psychology | 748 | 2017-2026 | CC-BY 4.0 |
+| [ece3](ece3/) | Ecology and Evolution | 1543 | 2011-2026 | Mixed CC-BY 4.0/3.0, CC-BY-NC 3.0 |
 | [elife](elife/) | eLife | 1000 | 2017-2026 | CC-BY 4.0 |
 | [frontiers](frontiers/) | Frontiers in Psychology | 1000 | 2017-2026 | CC-BY 4.0 |
 | [ijos](ijos/) | International Journal of Oral Science | 724 | 2009-2026 | Mostly CC-BY 4.0 |
