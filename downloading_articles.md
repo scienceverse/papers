@@ -1,7 +1,13 @@
 # Downloading and converting open-access articles: lessons learned
 
+**Read this document before starting a new paper database.** Nearly
+every mistake in here has recurred across multiple corpora when this
+step was skipped -- the practical checklist near the end is the
+fastest way to absorb it.
+
 Notes from building several paper corpora (JDM, Collabra, PLOS Medicine,
-BMC Medicine, International Journal of Oral Science, BMC Oral Health) for
+BMC Medicine, International Journal of Oral Science, BMC Oral Health,
+SCAN, i-Perception, Frontiers in Psychology, eLife, Open Mind) for
 [scienceverse/papers](https://github.com/scienceverse/papers). Each corpus
 follows the same pipeline: CrossRef for metadata and DOIs, Unpaywall for
 open-access PDF locations, GROBID for PDF-to-XML conversion, and
@@ -293,6 +299,10 @@ article") rather than overclaiming uniformity.
     extracted text, remaining non-article titles, duplicate DOIs/article
     IDs -- each of these has independently turned up real problems that a
     30-60 paper sample check missed.
+12. Before zipping PDFs for release, verify the zip's planned file list
+    against the RDS's actual paper list (`setequal()` check) -- not
+    "everything currently in the pdf/ folder". Re-verify by inspecting
+    the zip's real entries after creation, not just before.
 ## When a publisher's direct PDF host is bot-protected: try Europe PMC
 
 Some publishers' own PDF hosts are protected in ways that block automated
@@ -541,4 +551,140 @@ After creating the release, verify by downloading the `.rds` fresh to a
 temp directory (`gh release download {tag} --repo scienceverse/papers
 --pattern "{corpus}.rds"`) and confirming `length()` and `class()` match
 expectations -- this catches a corrupted upload or a wrong asset before
-calling the corpus done.
+calling the corpus done. **Also re-download the PDF zip(s) fresh and
+count entries against the RDS paper count** -- see the next section for
+why this specific check matters and has caught real bugs in published
+releases.
+
+## The PDF zip must be built from the RDS's file list, never from "whatever's in the pdf/ folder"
+
+A corpus's local `pdf/` directory accumulates files that should **not**
+ship in the final release zip: PDFs that failed GROBID conversion
+permanently (oversized, or a structurally-valid-but-rejected file --
+see "GROBID Internal Server Error has two causes" above), and PDFs for
+articles dropped during quality-audit cleanup (non-article notices,
+duplicate-DOI artifacts). Cleanup/exclusion scripts remove these
+papers from the `.rds`, but routinely forget to also delete the
+corresponding PDF file from disk. Building the zip with `Compress-Archive
+-Path "pdf/*"` (or equivalent) then ships every leftover file
+regardless of whether it survived into the corpus.
+
+This bug shipped silently in at least three already-published releases
+before being caught (`joc`: 1 stray oversized PDF; `ijos`: 4 stray
+PDFs across a 2-part zip; `jdm`: 3 stray PDFs) and was caught a fourth
+time before publishing (`iperc`: 13 stray files -- 9 permanent GROBID
+rejects + 4 dropped non-articles -- found before the zip was ever
+uploaded).
+
+**Always derive the zip's file list from the RDS itself, immediately
+before zipping, and verify the match before uploading:**
+
+```r
+papers <- readRDS(rds_path)
+valid_ids <- sapply(papers, \(p) basename(p$info$file_name)) |>
+  sub("^prefix\\.", "", x = _) |> sub("\\.xml$", "", x = _)
+
+disk_ids <- list.files(pdf_dir, pattern = "\\.pdf$") |>
+  sub("^prefix\\.", "", x = _) |> sub("\\.pdf$", "", x = _)
+
+stopifnot(setequal(valid_ids, disk_ids))  # fix before zipping if this fails
+```
+
+If they don't match, move (don't delete -- keep for diagnostics) the
+extra files out of `pdf/` into a scratch folder before zipping, rather
+than trying to filter them out at zip-creation time. After zipping,
+re-verify by listing the zip's actual entries (`zipfile.ZipFile(...).
+namelist()` in Python, or `[System.IO.Compression.ZipFile]::OpenRead(...)
+.Entries` in PowerShell) against the same `valid_ids` set -- don't trust
+that the pre-zip folder state survived the zip step unchanged.
+
+This check needs to run as a release-time step for **every** corpus,
+not just ones you suspect have the problem -- the bug is silent (no
+error, no warning) and the only symptom is a zip entry count that's
+slightly higher than the RDS paper count, which is easy to not notice
+unless you check for it deliberately.
+
+## GitHub Releases can refuse to let you replace an asset ("immutable release")
+
+Trying to delete or overwrite an asset on an older release can fail
+with `HTTP 422: Cannot delete asset from an immutable release`, even
+though the release isn't a draft or prerelease and asset replacement
+works fine on other releases. This appears to be a per-release
+immutability setting/policy on GitHub's side that isn't visible via
+`gh release view`'s usual fields (`isDraft`, `isPrerelease`,
+`publishedAt` all looked completely normal on an affected release).
+
+There's no documented way found yet to lift this on an existing
+release. The workaround: **publish a new release under a new tag**
+with the corrected assets, then delete the old release entirely once
+the new one is verified live:
+
+```bash
+gh release create {corpus}-$(date +%Y-%m-%d) --repo scienceverse/papers \
+  --title "{Corpus} corpus v1" --notes "Corrected re-release: ..." \
+  {corpus}.rds {corpus}_pdf.zip
+# verify the new release is correct, THEN:
+gh release delete {corpus}-OLD-DATE --repo scienceverse/papers --yes
+```
+
+Don't delete the old release until the new one's assets are confirmed
+present and correct (fresh `gh release download` + count check) --
+deleting first and having the new upload fail would leave the corpus
+unpublished entirely.
+
+## CrossRef's `date-parts` is a nested list -- `[1]` vs `[[1]]` matters
+
+`it$published$\`date-parts\`` parses as `list(list(2017, 9))`, i.e. a
+length-1 list whose single element is itself a list of integers (year,
+month, [day]). Reaching for the year with a single `[1]` index
+(`...$\`date-parts\`[[1]][1]`) looks correct but actually returns a
+**length-1 list containing the integer**, not the bare integer --
+because `[1]` on a list returns a sub-list, not the element, while
+`[[1]]` returns the element itself. Building a `data.frame()` column
+from this gives every row a list-column instead of an integer column,
+and `do.call(rbind, list_of_these_rows)` then fails with `names do not
+match previous names` (a confusing error that doesn't mention the real
+cause at all).
+
+```r
+# Wrong -- yr is a list(2017), not 2017
+yr <- it$published$`date-parts`[[1]][1]
+
+# Right -- yr is 2017
+yr <- it$published$`date-parts`[[1]][[1]]
+```
+
+This broke a complete-corpus build (small journal, no stratified
+sampling needed) on the very first run, with every one of 295 articles
+affected identically -- a useful tell that when *every* row has the
+same structural problem, suspect an indexing bug in the row-construction
+function rather than bad data from the API.
+
+## OpenAlex was evaluated as a PDF-location source and found to add no value over Unpaywall
+
+`api.openalex.org/works/doi:{doi}` was tested as a possible
+alternative/supplement to Unpaywall for finding open-access PDF
+locations, prompted by it being a newer, actively-maintained database.
+Tested side-by-side on 9 DOIs from journals already in this pipeline:
+8 of 9 returned a `pdf_url` identical to Unpaywall's `best_oa_location
+.url_for_pdf`, and the 9th had no PDF URL in either source. OpenAlex
+appears to draw from substantially the same underlying OA-detection
+crawl as Unpaywall for these journals, so it is not worth adding as a
+parallel lookup -- it didn't recover any DOI that Unpaywall missed in
+this sample. This may not generalize to every journal/publisher, but
+in the journals checked so far it added no measurable yield for the
+added complexity of a second API.
+
+## Same publisher access pattern (Cloudflare Client Hints) recurs across unrelated publishers
+
+The Cloudflare Client Hints block (documented above for SAGE) is not
+specific to SAGE -- the identical signature (`Cf-Mitigated: challenge`
+on a request with a Chrome User-Agent but no `Sec-CH-UA`/`Sec-CH-UA-
+Mobile`/`Sec-CH-UA-Platform` headers; resolved completely by adding
+those three headers, no rate-limiting needed) was also found on MIT
+Press's `direct.mit.edu` host. When a new publisher's PDF host returns
+a 403 with no obvious CAPTCHA/JS-challenge page, check the response
+headers for `Cf-Mitigated`/`Critical-Ch` **before** assuming it's a
+harder block (like Wiley's) that isn't worth pursuing -- this specific
+signature has a known, cheap fix and has now been seen on two unrelated
+publishers using Cloudflare.
