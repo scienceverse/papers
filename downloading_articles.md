@@ -783,3 +783,137 @@ view-source) before trusting it in a pipeline, especially for any
 extracted value that's used as-is in a follow-up request (a hash, a
 token, an ID) where a 1-character truncation produces a clean failure
 response rather than an obviously-malformed request.
+## A journal can use multiple, incompatible DOI formats for the same article -- check for version suffixes
+
+Some publishers register more than one DOI per article version under
+their "Reviewed Preprint" / versioned-publication model (eLife does
+this extensively: `10.7554/eLife.88799` for the canonical article and
+`10.7554/eLife.88799.3` for a specific reviewed-preprint revision).
+A URL-construction function that strips only the journal prefix
+(`sub("^10\\.7554/eLife\\.", "", doi)`) leaves the version suffix
+(`.3`) attached to what should be a bare article number, producing a
+URL that 404s -- e.g. `elifesciences.org/articles/88799.3` instead of
+the correct `elifesciences.org/articles/88799`.
+
+This bug looked exactly like the already-documented "intermittent
+Unpaywall/Europe PMC failure" pattern at first glance: failures that
+seemed to affect a random-looking subset of DOIs, that didn't fully
+resolve on a full-script rerun (some DOIs kept failing every time).
+The actual tell that distinguishes "deterministic bug" from "real
+intermittent flakiness": **151 of 158 stuck DOIs in this batch all
+shared the same DOI shape** (a second `.{digits}` suffix) -- when a
+large *specific, identifiable subset* of failures shares a structural
+property, check whether your code handles that structural variant
+correctly before assuming it's noise. Fix: strip a trailing version
+suffix before building the URL:
+
+```r
+article_num <- sub("^10\\.7554/eLife\\.", "", doi, ignore.case = TRUE)
+article_num <- sub("\\.[0-9]+$", "", article_num)   # strip ".3" etc
+```
+
+## When scraping a PDF link from an HTML page, anchor the filename pattern -- don't just match "looks like a PDF link"
+
+An eLife article landing page links several different PDFs: the main
+article (`elife-<num>-v<n>.pdf`), a combined figures supplement
+(`elife-<num>-figures-v<n>.pdf`), and per-figure source data
+(`elife-<num>-fig1-data1-v<n>.pdf`, etc), often with the supplementary
+files appearing *before* the main article link in the page's HTML. A
+regex pattern like `elife-[A-Za-z0-9.\-]+\.pdf` matches any of these,
+and `regexpr()` (singular -- first match only) will silently return
+whichever one happens to appear first in the document, which is often
+a supplementary-data file, not the article. The download then
+"succeeds" (200 status, valid `%PDF-` header, plausible-looking file
+size for a short item) while actually containing the wrong content
+entirely -- a different document than the one the manifest claims it
+is.
+
+Anchor the filename to the exact expected shape instead of a loose
+character class:
+
+```r
+# Wrong -- matches the first elife-*.pdf link of any kind
+'elife-[A-Za-z0-9.\\-]+\\.pdf'
+
+# Right -- matches only "elife-<digits>-v<digits>.pdf", which is
+# unique to the main article PDF
+'elife-[0-9]+-v[0-9]+\\.pdf'
+```
+
+When auditing for this kind of contamination after the fact: check
+file size against the *type* of content expected (a full research
+article is rarely under ~300KB once compressed; a 2-4 page commentary
+piece legitimately can be), and cross-reference the PDF's actual page
+count (`pdfinfo`) and any embedded `/Title` metadata against the
+expected article title -- don't rely on file size alone, since some
+journals (eLife's "Insight" commentaries, for example) have
+legitimately short full articles that look identical in size to a
+mis-scraped supplementary file.
+
+## R's default regex engine can mis-locate a match by one byte/character on some UTF-8 pages -- use `perl = TRUE`
+
+A `regexpr()`/`regmatches()` call extracting a URL from scraped HTML
+occasionally returned the match starting one character late --
+`"ttps://elifesciences.org/..."` instead of `"https://...".` This
+isn't a one-off typo in the matched text itself: the regex pattern
+correctly starts with a literal `https://`, the text really does
+contain a literal, complete `https://...` substring at that position,
+and `substr()` (character-indexed) confirms the `h` is there -- but
+`regexpr()`'s reported match-start position was one *byte* later than
+the correct character position. The resulting truncated string fails
+downstream with a low-level, confusing error (`Unsupported protocol
+[elifesciences.org]: Protocol "ttps" not supported`) that doesn't look
+like a regex bug at all.
+
+This is a known category of issue with R's default TRE-based regex
+engine on certain UTF-8 content (the exact trigger wasn't isolated --
+suspected to be a multibyte character earlier in the same string
+throwing off byte-vs-character offset bookkeeping in some code paths,
+but not reproducible from a minimal example). It did not affect every
+page -- only a handful of articles out of 1000 in one corpus -- which
+made it look like sporadic flakiness rather than a deterministic
+engine quirk.
+
+**Fix: pass `perl = TRUE` to `regexpr()`/`gregexpr()` whenever
+matching against scraped web content**, not just when you need a PCRE
+feature TRE lacks. PCRE's UTF-8 handling does not have this off-by-one
+issue:
+
+```r
+# Can silently mis-locate the match start on some UTF-8 input
+regexpr(pattern, html)
+
+# Reliable
+regexpr(pattern, html, perl = TRUE)
+```
+
+If you see a downstream error mentioning a malformed/truncated version
+of a string you extracted with `regexpr()` -- especially "missing its
+first character" specifically -- suspect this before assuming the
+source page changed or the upstream request was corrupted.
+
+## A batch of "intermittent-looking" failures can be 2-3 unrelated deterministic bugs layered together
+
+A retry loop that recovers some failures on each successive pass looks
+exactly like the genuine intermittent-API-failure pattern documented
+elsewhere in this file -- but isn't necessarily that. In one corpus,
+a batch of ~390 stuck downloads turned out to be caused by three
+separate, fully deterministic bugs (a URL-construction bug affecting
+DOIs with version suffixes, a link-selection bug picking the wrong PDF
+on some pages, and a regex engine quirk truncating the URL on others),
+each affecting a different subset, fixed one at a time across several
+rounds of "rerun and see what's still stuck." Naively reading "the
+retry recovered some but not all" as confirmation of the known
+intermittent-flakiness pattern, and just running more retries, would
+have left the corpus permanently short by however many DOIs hit the
+real bugs.
+
+**Before accepting "intermittent flakiness, just retry" as the
+explanation for a stalled retry, check whether the *same exact
+request* (not a freshly re-fetched one) fails 100% of the time.** True
+intermittent flakiness fails some attempts and succeeds on others for
+the literal same request. A bug fails it every time. Also check
+whether the stuck items share an identifiable structural property
+(same DOI shape, same publication date range, same response size) --
+genuine API flakiness doesn't correlate with input structure; a code
+bug usually does.
