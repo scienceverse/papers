@@ -1067,3 +1067,177 @@ confirm the file actually exists somewhere in the repo (`find . -name
 '<hit>'` from the repo root). If a hit doesn't resolve to a real,
 committed file, the corpus's `build.R` is not actually reproducible
 regardless of how complete it looks at a glance.
+## Entitled (paywalled) PDFs behind Cloudflare bot-detection need a real, *stealth* browser through the institutional proxy
+
+The Cloudflare lessons above (Client Hints headers; Europe PMC fallback)
+cover open-access PDFs whose *host* is bot-protected. A harder case
+remains: papers your institution is **entitled** to but that are not
+open-access, where the publisher (ScienceDirect/Elsevier is the worst
+offender) serves the PDF only to a logged-in *browser session* and
+additionally runs Cloudflare bot-detection on the PDF fetch. No `httr2`
+trick reaches these -- there is no Unpaywall location, Europe PMC has no
+deposit, and the PDF URL is a short-lived signed token minted by
+JavaScript on click. The only thing that works is driving a **real
+browser** (Playwright/Chromium) that (a) carries your institutional
+login and (b) does not look automated to Cloudflare.
+
+Two failure modes stack here, and you have to defeat both:
+
+**1. The session/access layer.** Dutch (and many other) universities
+provide access via an **EZproxy** that rewrites the host
+(`www.sciencedirect.com` -> `www-sciencedirect-com.<proxy-host>`; dots
+become dashes, existing dashes double). The EZproxy session cookie is
+*session-scoped* -- it does **not** persist across a browser restart, and
+it **times out faster than a multi-hundred-DOI run takes**. Practical
+consequences: you cannot "log in once, reuse the saved profile later";
+you must log in interactively in the *same* browser that does the
+downloading, and you must expect long runs to die mid-way and be re-run
+(so make the downloader restart-safe: skip any DOI whose PDF is already
+on disk).
+
+**2. The Cloudflare bot layer.** Even fully logged in, clicking "View
+PDF" through Playwright's default Chromium gets a `403` on a
+`.../cdn-cgi/verify/...` request and the real PDF host
+(`pdf.sciencedirectassets.com`) is never reached -- because Playwright
+advertises `navigator.webdriver = true` and launches with
+`--enable-automation`. The fix is to launch a **stealth** context: drop
+the automation flag and hide the webdriver fingerprint. After this, the
+exact same click yields `>> DOWNLOAD ...-main.pdf` and a valid `%PDF-`.
+
+A third, easily-missed detail: on ScienceDirect the "View PDF" anchor has
+`target="_blank"`, so the PDF loads in a **popup tab**, not the page you
+clicked from. You must hook the download/response listener on the *popup*,
+not the opener. And set the Chromium profile to **download** PDFs rather
+than render them inline (`plugins.always_open_pdf_externally = true` in
+the profile's `Default/Preferences`), so a `download` event fires reliably
+instead of the bytes disappearing into the internal PDF viewer.
+
+How to diagnose which layer is failing (do this before writing the
+downloader -- guessing wastes hours): open one entitled article in the
+Playwright browser, log in, then trace the popup's network. A `403` on
+`cdn-cgi/verify` means the bot layer (stealth needed). A popup that
+bounces back to the article URL with no `pdf.sciencedirectassets.com`
+request is the same bot block upstream. A `200` from
+`pdf.sciencedirectassets.com` means you've won -- capture that response
+or the download event.
+
+Minimal reproducible downloader (Node + Playwright), verified against
+ScienceDirect through a TU/e EZproxy. It logs in once interactively, then
+clicks each article's View-PDF link and saves the popup's download:
+
+```js
+// elsevier_proxy_download.mjs
+//   node elsevier_proxy_download.mjs dois.txt
+// Prereq: npm i playwright ; one-time: launch ./pw_profile once, then patch
+// plugins.always_open_pdf_externally=true into pw_profile/Default/Preferences.
+import { chromium } from 'playwright';
+import fs from 'fs'; import path from 'path'; import readline from 'readline';
+
+const PROXY = 'dianus.libr.tue.nl';          // <-- your EZproxy host
+const PDFDIR = './pdfs';
+const proxify = (u) => {                      // EZproxy host-rewrite rule
+  const m = u.match(/^(https?):\/\/([^/]+)(\/.*)?$/); if (!m) return u;
+  const h = m[2].split(':')[0].replace(/-/g, '--').replace(/\./g, '-');
+  return `https://${h}.${PROXY}${m[3] || '/'}`;
+};
+const safe = (d) => d.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 120) + '.pdf';
+const ask  = (q) => new Promise(r => { const rl = readline.createInterface(
+  { input: process.stdin, output: process.stdout }); rl.question(q, a => { rl.close(); r(a); }); });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+const dois = fs.readFileSync(process.argv[2], 'utf8').split(/\r?\n/)
+  .map(s => s.trim()).filter(Boolean);
+const have = new Set(fs.readdirSync(PDFDIR).filter(f => f.endsWith('.pdf'))
+  .map(f => f.replace(/\.pdf$/, '')));                    // restart-safe
+const todo = dois.filter(d => !have.has(safe(d).replace(/\.pdf$/, '')));
+
+// STEALTH launch: this is what defeats the Cloudflare bot check.
+const ctx = await chromium.launchPersistentContext('./pw_profile', {
+  headless: false, acceptDownloads: true,
+  args: ['--disable-blink-features=AutomationControlled'],
+  ignoreDefaultArgs: ['--enable-automation'],
+});
+await ctx.addInitScript(() => {
+  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+  window.chrome = { runtime: {} };
+  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+  Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+});
+
+let pending = null;                            // { dest, done }
+const hook = (p) => {                          // hook BOTH opener and popup
+  p.on('download', async d => { if (pending && !pending.done) {
+    try { await d.saveAs(pending.dest); pending.done = true; } catch {} } });
+  p.on('response', async r => { if (pending && !pending.done &&
+    (r.headers()['content-type'] || '').includes('pdf')) {
+    try { const b = await r.body();
+      if (b.slice(0, 5).toString() === '%PDF-') {
+        fs.writeFileSync(pending.dest, b); pending.done = true; } } catch {} } });
+};
+ctx.on('page', hook);
+const page = ctx.pages()[0] || await ctx.newPage(); hook(page);
+
+await page.goto(proxify('https://www.sciencedirect.com/journal/addictive-behaviors'),
+  { waitUntil: 'domcontentloaded' }).catch(() => {});
+await ask('Log into the institution in this window, then press ENTER... ');
+console.log('webdriver hidden:',
+  (await page.evaluate(() => navigator.webdriver)) === undefined);   // expect true
+
+let ok = 0, fail = 0;
+for (const doi of todo) {
+  const dest = path.join(PDFDIR, safe(doi)); pending = { dest, done: false };
+  try {
+    await page.goto(proxify(`https://doi.org/${doi}`),
+      { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleep(2500);
+    const a = await page.$('a[href*="/pdf"]');                 // the View-PDF link
+    if (a) {
+      const [popup] = await Promise.all([
+        page.waitForEvent('popup', { timeout: 20000 }).catch(() => null),
+        a.click({ timeout: 8000 }).catch(() => {}),
+      ]);
+      if (popup) { hook(popup);                                // PDF loads in popup
+        for (let t = 0; t < 20 && !pending.done; t++) await sleep(1000);
+        await popup.close().catch(() => {}); }
+    }
+  } catch {}
+  const good = pending.done && fs.existsSync(dest) && fs.statSync(dest).size > 2000;
+  if (good) ok++; else { fail++;
+    if (fs.existsSync(dest) && fs.statSync(dest).size <= 2000) fs.unlinkSync(dest); }
+  await sleep(2000 + Math.random() * 2000);                    // be polite
+}
+console.log(`ok=${ok} fail=${fail}`);
+await ctx.close(); process.exit(0);
+```
+
+To patch the profile preference before the first run (so PDFs download
+rather than render inline), after launching `./pw_profile` once so the
+file exists:
+
+```python
+import json
+p = "pw_profile/Default/Preferences"
+d = json.load(open(p, encoding="utf-8"))
+d.setdefault("plugins", {})["always_open_pdf_externally"] = True
+json.dump(d, open(p, "w", encoding="utf-8"))
+```
+
+**Scope and ethics.** This is for retrieving papers your institution is
+licensed for, for a specific, bounded author/topic corpus (a fair-use
+research use), at a human-like rate (the `sleep()` calls are not
+optional) -- not for bulk-harvesting a publisher's catalogue. Keep the
+DOI list explicit and finite, stop on repeated blocks rather than
+hammering, and never store institutional credentials in a script (the
+login happens interactively in the real browser; the script only reuses
+the live session).
+
+**What this does *not* solve.** Journals your institution does not
+subscribe to show a paywall/"Get access" page after login -- those are
+genuinely unavailable and no amount of stealth changes that. To separate
+"we have access but the scraper missed it" from "we have no access",
+audit each still-missing DOI's landing page through the live session and
+classify it (a PDF link present but unfetched => technical; "purchase /
+get access" copy => no entitlement). Reporting a real download *success
+rate* requires that audit -- a raw failure count conflates the two, and
+it is easy to fool yourself into reading "low success rate" as "blocked"
+when half of it is simply "not subscribed."
