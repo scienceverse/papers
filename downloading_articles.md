@@ -1241,3 +1241,263 @@ get access" copy => no entitlement). Reporting a real download *success
 rate* requires that audit -- a raw failure count conflates the two, and
 it is easy to fool yourself into reading "low success rate" as "blocked"
 when half of it is simply "not subscribed."
+
+## A hybrid journal's institutional-proxy PDF host can need NO stealth at all -- check before assuming it does
+
+The BES (British Ecological Society) journals corpus needed neither
+Europe PMC (coverage was ~2-5% -- see "under 10% for a hybrid journal"
+above, confirmed again here) nor the stealth-Playwright treatment
+documented for ScienceDirect. A PLAIN, non-stealth Playwright session
+(no automation-flag suppression, no `navigator.webdriver` override) hit
+zero Cloudflare blocks through the TU/e EZproxy for either OA or
+genuinely closed/paywalled Wiley articles, once logged in -- confirmed
+by inspecting network responses directly (a 200 on
+`application/pdf` from `.../doi/pdfdirect/...`, no `cdn-cgi/verify` 403
+anywhere in the log). Wiley is the same publisher the "effectively
+blocked" Cloudflare lesson above was written about, for the ece3
+corpus -- but that finding was about UNAUTHENTICATED `httr2` requests
+to Wiley's OA content; it does not generalize to an AUTHENTICATED
+browser session through an institutional proxy. Don't assume stealth
+measures are needed for a new publisher/access route just because the
+same publisher was hard-blocked in a different, unauthenticated
+context. Diagnose on one real article first (as the existing checklist
+already says) and only add stealth if the diagnostic actually shows a
+`cdn-cgi` challenge or a 403 with Cloudflare headers.
+
+## A synthetic click can silently do nothing on some pages, with no error, until a human clicks the identical link
+
+On several large (15MB+), figure-heavy BES/Wiley articles, Playwright's
+element click produced no popup, no download, and no error -- the
+popup-wait simply timed out every time, repeatably, for those specific
+articles. A real human click on the exact same visible link, in the
+same open browser window, completed the download immediately. The
+cause was not isolated (the leading hypothesis is that Wiley's click
+handler for the download button requires a genuine trusted user-gesture
+event that a synthetic click doesn't satisfy for that particular button
+variant, but this was not confirmed against the page's JS). This did
+not correlate with OA/closed status, only roughly with file size.
+
+Practical fix: don't chase this in code. Run the batch downloader
+non-headless (as this pipeline already does for the login step) and
+leave it running where the operator can see it; when it stalls on one
+article with no progress for longer than the timeout, click the link
+once by hand and let the script's download/response listeners pick up
+the resulting file exactly as they would from a synthetic click -- they
+don't care who or what triggered the event. Do not spend time trying to
+make the synthetic click "more real" (extra delays, mouse movement
+simulation, etc.) before confirming with a diagnostic run whether this
+is even reproducible on a given publisher -- it may be specific to one
+button implementation, not a general Playwright limitation.
+
+## A download stuck at an exact, round byte count across repeated retries is not random flakiness -- stop retrying automatically
+
+Two PDF downloads from the same run were observed truncated at exactly
+262144 bytes (256KB, i.e. 2^18) -- not once, but identically on a
+second automated retry attempt, hours apart. Both files passed a naive
+"did a file get written and is it a real PDF" check (valid `%PDF-`
+header) despite being genuinely incomplete (no `%%EOF` trailer). This
+matches the general pattern already documented elsewhere in this file
+("the same exact request fails 100% of the time = a deterministic
+cause, not flakiness") -- but the specific tell here is worth calling
+out on its own: an exact power-of-two byte count repeating across
+retries points at a fixed buffer/chunk-size cutoff somewhere in the
+proxy or connection stack, not at "the network dropped at a random
+point." Retrying the identical automated path a third time is unlikely
+to help. The fix that worked: download that one specific file by hand
+in the visible browser instead of through the scripted path, which
+produced a complete, correctly-sized file on the first manual attempt.
+Always verify a "successful" download with BOTH the `%PDF-` header
+check already documented above AND a trailer check (checking that
+`%%EOF` appears in the file's last ~1000 bytes) -- the header check
+alone let both truncated files through undetected until GROBID's
+conversion failure ("Internal Server Error" on a structurally
+incomplete file) surfaced the problem indirectly.
+
+## GROBID's own upload-size limit can be hit by a paper whose bloat is invisible to a naive "count the embedded images" check
+
+A GROBID server can enforce its own upload size cap independent of
+anything about PDF structure quality (confirmed: 20MB on one TU/e
+instance, via a real, reproducible 413 Payload Too Large on 14 of 1857
+papers in one corpus, all 16-50MB figure-heavy articles). The
+non-obvious part: not all PDF bloat is embedded raster images. Removing
+every embedded image (PyMuPDF's per-object image deletion, or the
+equivalent) can save almost nothing for a subset of oversized files --
+confirmed on a real case, a 41.8MB, 9-page PDF whose embedded images
+totalled 15KB, yet one single page's decompressed content stream alone
+was 207MB. The bloat there was vector-graphics bloat: a plot/map/figure
+exported as tens of thousands of individual line/path drawing
+instructions instead of a compressed bitmap -- common from R/ggplot2
+and matplotlib exports with many data points (e.g. a dense scatterplot
+or a high-resolution map rendered as vector polygons rather than
+rasterized). This does not show up as an "image" in any PDF library's
+image-listing API at all; it is inline drawing commands in the page's
+own content stream. Detect it by comparing each page's DECOMPRESSED
+content-stream size (sum the decompressed size of every content stream
+object on the page) against a generous threshold (5MB was used here; a
+normal text/figure page is usually under 100KB) -- checking the on-disk
+file size tells you nothing page-by-page, since the whole file is
+compressed again on save.
+
+The fix, since GROBID only reads the text layer and never needs the
+original visual appearance: for any page whose content stream is
+vector-bloated, wipe its content stream entirely and delete its images,
+then re-insert JUST the page's own extracted text as a plain text box,
+at a small font size, spilling onto freshly inserted blank pages if it
+doesn't fit at that size on one page. This is lossless for GROBID's
+purposes (99.9%+ of extractable text confirmed preserved by character
+count, before vs. after, across all 18 affected files in this corpus)
+and is NOT a visual reproduction -- it does not need to look like the
+original page, only contain the same words.
+
+A real bug hit while building this: PyMuPDF's `insert_textbox()`
+returns a NEGATIVE number (the overflow deficit, in points) when the
+text does not fit, and in that failure case it inserts NOTHING at
+all -- silently. A first attempt at this fix picked a single fixed font
+size (8pt) and called `insert_textbox()` once per page; for a genuinely
+text-dense page this failed to fit, returned negative, and silently
+zeroed out that page's text entirely (confirmed: a 3039-character
+discussion section dropped to 0 extractable characters on that page).
+Always check the return value is non-negative before trusting that text
+was actually inserted; do not assume success from the absence of an
+exception. The robust fix is a binary search on how much of the
+remaining text fits at a fixed small font size (6pt worked reliably),
+committing only the winning length once found, then spilling the
+remainder onto a newly inserted page and repeating -- this handles
+arbitrarily large text blocks without ever guessing wrong and silently
+losing content.
+
+Neither `pdftools::pdf_compress()` nor `qpdf::pdf_compress()` (R)
+solves either bloat case. Both were tested directly against real
+oversized files from this corpus before reaching for Python: on a
+pure-image-bloat file, `pdftools::pdf_compress()` (poppler/Ghostscript
+image re-quantization) saved 49.5MB to 48.9MB (1.2%); on the
+pure-vector-bloat file described above, `qpdf::pdf_compress()` (lossless
+stream re-compression) saved 41.8MB to 41.4MB (1.0%). Neither R package
+exposes per-object image deletion or page-content-stream editing --
+they only re-encode what is already there. PyMuPDF (Python) is
+currently the only tool in this pipeline's toolbox capable of the
+actual removal needed. If a future R package gains this capability,
+re-evaluate; until then, treat "shrink an oversized PDF for GROBID" as
+a Python-only step in an otherwise R-based pipeline, and say so
+explicitly in the corpus's own docs rather than silently mixing
+languages without explanation.
+
+## The GitHub Contents API silently returns EMPTY content for files over roughly 1MB -- always check the byte count of what you actually got, not just the HTTP status
+
+Copying an existing file within a repo via the Contents API (GET
+contents to read, then PUT contents to write elsewhere) works perfectly
+for small files, but for a 3.2MB file the GET request returned HTTP 200
+with an empty-content encoding and an EMPTY content field -- no error,
+no truncation warning, just nothing. The subsequent PUT then
+"succeeded" (also HTTP 200) and created a real file at the new path
+that was genuinely 0 bytes. Every layer reported success; only checking
+the new file's actual size afterward revealed the problem. This is a
+documented GitHub API behavior (the Contents API GET endpoint only
+inlines content up to roughly 1MB), not a bug in any particular client
+library or script.
+
+The fix: for anything that might exceed ~1MB, read the content via the
+Git Blobs API instead (using the blob `sha` from the Contents API's own
+metadata response, which is always present regardless of file size) --
+that endpoint returns full content regardless of size. Always verify a
+copy by re-fetching the new path's size and comparing it to the
+original's size before deleting the original -- a copy-then-delete-
+original workflow is only as safe as that verification step; skipping
+it, or trusting a 200 status code alone, can silently replace a real
+file with an empty one.
+
+## A CrossRef field returned lowercased can create silent duplicate records on every re-run if compared case-sensitively
+
+`rcrossref::cr_works()` returns each record's own `doi` field lowercased
+by CrossRef itself, even when the DOI you queried with contained
+uppercase characters (e.g. querying a DOI containing `2041-210X` returns
+a record with `2041-210x`). A resumable fetch loop that checks which
+known DOIs are not yet in the already-fetched set will treat every DOI
+containing uppercase letters as perpetually missing, since the case
+never matches -- re-fetching and re-appending it on every single
+re-run. This produced 241 duplicate rows (out of 1857 total DOIs) in
+one corpus before being caught, all sharing the same journal prefix
+containing uppercase letters -- a large, specific, identifiable subset
+sharing a structural property, which is exactly the tell (documented
+elsewhere in this file) that should prompt looking for a deterministic
+cause rather than accepting it as noise.
+
+Fix: compare DOIs case-insensitively everywhere in a resumable CrossRef
+pipeline (lowercase both sides of every comparison), and deduplicate by
+the lowercased key at every checkpoint save, not only at the very
+end -- a resumed run reloads the checkpoint file and repeats whatever
+comparison logic produced the duplicates in the first place, so a fix
+that only runs once at the end does not prevent the bug from recurring
+on the next resume.
+
+## `rcrossref::cr_works()`'s date fields are already flat strings -- the raw-CrossRef-JSON date-parts gotcha does not apply to it
+
+The existing "CrossRef's date-parts is a nested list" lesson above is
+about parsing the raw CrossRef REST API JSON directly (e.g. via a plain
+`httr2` request, as ece3's `build.R` does for its own DOI discovery).
+It does NOT apply to `rcrossref::cr_works()`'s already-parsed output:
+that function's publication-date columns come back as plain strings
+like "2021-10" or "2021", not as a nested date-parts structure. Code
+that defensively unwraps a nested list here will silently extract the
+wrong thing -- confirmed: this produced a manifest year column full of
+"2021-10"-style strings instead of plain "2021", which only became
+visible on a manual spot-check of the output, not from any error or
+warning. Check which CrossRef access path you're actually using
+(`rcrossref` vs. a raw JSON request) before reusing date-extraction
+code from elsewhere in this pipeline -- the two paths return
+differently-shaped data for the same underlying field, and code correct
+for one silently produces wrong-but-plausible-looking output for the
+other.
+
+## A rejected tool call can still have executed against the real filesystem before the rejection registers
+
+A background shell command was interrupted by an explicit user
+rejection ("the tool use was rejected... STOP what you are doing") --
+but hours later, on this same corpus, hundreds of files existed on disk
+under a filename convention that only that specific interrupted
+command's code path could have produced, with genuinely correct,
+non-corrupted content matched by DOI. The command had evidently run to
+completion (or very close to it) against the real filesystem despite
+the interruption message implying it had been stopped. This is not the
+"stale background job" pattern already documented above (a job that
+keeps running in the background and is simply forgotten about) -- this
+was a job the operator explicitly, actively rejected, that nonetheless
+left a complete result.
+
+Practical lesson: a "the tool use was rejected" message is a statement
+about whether the harness will act on the result or continue the
+conversation from that point -- it is not a guarantee that the
+underlying OS-level process the tool call started never ran or was
+killed mid-execution. If unexplained files, renamed files, or state
+changes turn up that don't match anything knowingly run, check whether
+a recently rejected command's own code (not just currently
+visible/running processes) could explain them, by testing a specific,
+falsifiable prediction its logic would make (here: "if this copy-based
+rename function ran, the DOI-named ORIGINAL of every renamed file
+should still exist, since the function copies rather than moves") --
+rather than defaulting to a vaguer explanation (background sync
+software, an unrelated stray process) that happens to fit the
+timestamp alone but does not survive a content-level check.
+
+## Reorganizing a single-corpus repo into a multi-corpus layout: move-then-verify-then-delete, never delete-then-recreate
+
+A private corpus repo held exactly one corpus with all its files flat
+at the repo root, plus a large committed `.rds` that duplicated an
+existing GitHub Release asset of the exact same size -- itself worth
+flagging as a likely earlier mistake rather than silently preserving: a
+compiled artifact that the repo's own README already calls a "Release
+asset" should not also be a committed git blob. Adding a second corpus
+under the same flat convention would have collided with every one of
+those filenames. The safe order for this kind of reorg, used here
+without incident: for each file, (1) COPY it to its new subfolder path
+(using the Git Blobs API for anything over ~1MB -- see the
+Contents-API-empty-content lesson above), (2) verify the copy's size
+matches the original's exactly, (3) ONLY THEN delete the original from
+its old path. Never delete first and recreate second -- a failed or
+empty-content copy (see above) combined with an already-deleted
+original is unrecoverable without a separate backup, whereas a failed
+copy caught before deletion costs nothing. This same copy-verify-delete
+order applies to renaming/reorganizing release assets too, though this
+specific reorg didn't need to touch those (GitHub Releases are keyed by
+tag/repo, not by any repo file path, so a repo-content reorg like this
+one never requires touching existing release assets at all).
