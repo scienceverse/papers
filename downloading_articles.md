@@ -1501,3 +1501,168 @@ order applies to renaming/reorganizing release assets too, though this
 specific reorg didn't need to touch those (GitHub Releases are keyed by
 tag/repo, not by any repo file path, so a repo-content reorg like this
 one never requires touching existing release assets at all).
+
+## Lessons from a DOI list supplied by someone else (Glasgow SPN corpus, mixed publishers)
+
+The corpora above were sampled from CrossRef per journal. The Glasgow SPN
+corpus (`papers_private`, 1035 papers from ~440 journals) started instead
+from a list of DOIs exported from a university repository, and had to
+reach ~30 publishers, half of them behind a paywall. Most of what follows
+is about that situation.
+
+### A DOI list from a repository export needs cleaning and checking, one DOI at a time
+
+- **Escaped characters.** 19 of 1101 DOIs contained `\_` instead of `_`
+  (`10.1162/imag\_a\_00001`), presumably from a LaTeX or Markdown export.
+  CrossRef returns 404 for these. Remove backslashes before anything else.
+- **DataCite DOIs.** OSF, arXiv, PsychArchives and Dagstuhl DOIs are
+  registered with DataCite, not CrossRef: `api.crossref.org/works/{doi}`
+  returns 404 for them. Look up `api.datacite.org/dois/{doi}` when CrossRef
+  has nothing, before concluding a DOI is wrong.
+- **Truncated and missing DOIs.** One DOI was missing its last digit and
+  four rows had no DOI. Both were recovered by a CrossRef
+  `query.bibliographic` search on the title of the repository record,
+  accepting only an exact title match (lowercase, alphanumerics only).
+  Repository pages do not all have a `DC.title` meta tag; fall back to the
+  page's `<title>`.
+- **Preprint DOIs in the list.** A repository list can contain the DOI of
+  the preprint rather than of the journal article (19 here). Decide with
+  the corpus owner whether these stay, are dropped, or are replaced by the
+  published version (CrossRef's `is-preprint-of` relation) -- it is not a
+  download question, and is easy to miss because the PDF downloads fine.
+- **OSF preprints may have no PDF at all.** Five PsyArXiv/EdArXiv
+  preprints had a Word file as their primary file. The OSF API needs the
+  version suffix (`api.osf.io/v2/preprints/abcde_v1/`; without `_v1` it
+  returned 502), and `?embed=primary_file` also returned 502, so look the
+  file up via `relationships.primary_file.links.related.href` in a second
+  request and check its name ends in `.pdf`.
+
+### A supplement passes the title check -- check for the article's own DOI too
+
+A first version of the browser downloader saved an Elsevier supplementary
+file (`...-mmc1.pdf`) as the article. It had a valid `%PDF-`/`%%EOF`, a
+plausible size, and the full article title on page 1 -- supplements repeat
+the title. What it lacked was the article's DOI. Across 1035 PDFs, 993 had
+their own DOI (whitespace removed, lowercased) in the text of the first
+three pages; the 42 that did not were all checked by hand and were all
+correct (eLife, Science Advances, Lancet journals, preprints and some small
+journals print the DOI at the end or not at all), so "title present AND DOI
+present" is a cheap first-pass filter that sends ~4% of files to a manual
+look.
+
+The cause was link scraping on a page full of other articles' links. A
+ScienceDirect article page has one "View PDF" link for the article and
+dozens more in the reference list, all with identical link text. Rules
+that worked:
+
+- ScienceDirect: only the `/pdfft` link whose path contains the article's
+  own PII (`/pii/<PII>/pdfft?...`), taken from the article URL.
+- Any other generic "PDF" link: only if it contains the DOI suffix, and
+  never if it matches `supplement|suppl|mmc\d|/esm/|figure|appendix`.
+- Prefer `citation_pdf_url` and known publisher URL patterns over scraping.
+
+### ScienceDirect rate-limits the shared institutional proxy -- stop on the first 429
+
+After ~50 ScienceDirect articles at one every 10-25 seconds through the
+TU/e EZproxy, every further request was answered with **HTTP 429** and a
+redirect to an Elsevier support page. Every user of the institution shares
+the proxy's IP address, so carrying on risks the institution's access, not
+just the download run. What worked:
+
+- The downloader stops by itself at the first 429 response from any host.
+- After a pause of about an hour, the remaining Elsevier articles at
+  **one per minute** gave no further 429s. Other publishers' articles were
+  downloaded in the gaps (a per-DOI-prefix minimum interval, e.g.
+  `--slow 10.1016=60`), so the slow pace for one publisher does not slow
+  the whole run.
+- HighWire's maintenance page (`maintenance.highwire.org/maintenance-disruption.html`)
+  is also served with status 429. That is an outage on their side, not a
+  rate limit; exclude it from the stop rule.
+
+### Keep one browser open and attach to it, instead of launching one per run
+
+The EZproxy session cookie is lost whenever a Playwright-launched browser
+closes, so every test, diagnostic and retry run needed a new interactive
+login. Instead, start Playwright's own Chromium once by hand with a
+debugging port, log in there, and have every script attach to it:
+
+```bash
+chrome.exe --user-data-dir=pw_profile --remote-debugging-port=9222 \
+  --disable-blink-features=AutomationControlled https://<proxied-start-page>
+```
+```python
+ctx = p.chromium.connect_over_cdp("http://127.0.0.1:9222").contexts[0]
+page = ctx.new_page()   # work in a tab of your own; close only that tab at the end
+```
+
+A browser started this way has no `--enable-automation` flag, so
+`navigator.webdriver` is false without any init-script tricks.
+ScienceDirect's PDF link passed its Cloudflare check (`crasolve`) in this
+browser for most articles (until the rate limit below), where the same
+links had failed repeatedly in a Playwright-launched browser. Set
+`plugins.always_open_pdf_externally` in the profile's `Default/Preferences`
+before starting it, so that PDFs fire a `download` event.
+
+**Run only one downloader against the shared browser at a time.**
+`context.on("response")` and download listeners are context-wide: a second
+process attached to the same browser would see -- and save -- the first
+process's PDFs under its own DOIs.
+
+### On the institution's VPN, try the publisher directly when it fails through the proxy
+
+On the TU/e VPN the publishers see a TU/e IP address, so access works
+without the EZproxy host rewriting. Several sites that failed through the
+proxy worked directly: JAMA, Ovid/Wolters Kluwer (`journals.lww.com` now
+redirects there), MDPI (Akamai "Access Denied" through the proxy), De
+Gruyter ("Max challenge attempts exceeded"), Royal Society
+(`ERR_BLOCKED_BY_CLIENT` on the proxied doi.org link). A second pass in
+direct mode over everything that failed through the proxy recovered ~25
+papers. Also, the TU/e GROBID server and the EZproxy itself were not
+reachable from a home connection without the VPN (GROBID returned a
+firewall "Web Page Blocked" page with HTTP 500) -- check the VPN before
+debugging either.
+
+### Publisher-specific notes
+
+- **IEEE**: the article URL lands on `stamp/stamp.jsp?arnumber=N`, a frame
+  around the PDF. Fetch `ieeexplore.ieee.org/stampPDF/getPDF.jsp?tp=&arnumber=N&ref=`.
+- **APA PsycNet**: the page loads slowly (`doiLanding?doi=` -> fulltext
+  page); a fixed 10-15 second wait finds nothing. Wait for the selector
+  `a[href*="/fulltext/"][href$=".pdf"]` (up to 45 s). The PDF link carries
+  the PsycNet record ID, not the DOI. Without a PsycArticles subscription
+  only open-access articles have the link.
+- **JAMA**: the PDF link redirects back to the abstract unless you are
+  signed in with a personal JAMA account -- even when the institution can
+  read the full text in HTML. Not solvable with institutional access alone.
+- **Nature-family, Science, BMJ journals**: check entitlement before
+  assuming a technical failure -- a paywall text on the page ("access
+  through your institution", "buy article", ...) means no subscription.
+  Log a paywall flag per DOI; it separates "no access" from "download bug".
+
+### Smaller pitfalls
+
+- **Playwright sync API: `time.sleep()` freezes event processing.** A
+  login-wait loop that polled `page.url` with `time.sleep(3)` never saw
+  the page change; use `page.wait_for_timeout(3000)`, which lets the
+  event loop run.
+- **A to-do list goes stale when another step runs at the same time.**
+  The browser run's DOI list was made while the open-access download was
+  still running; check that the PDF does not exist yet right before each
+  DOI, not only when the list is made -- otherwise papers are fetched twice
+  and rate-limited slots are wasted.
+- **`strip_images.py` can run for hours on one file.** On a 19.4MB Nature
+  paper the text-rebuild step was still running after 30 minutes of CPU
+  time. Give each call a time limit (`system2(..., timeout = 300)`) and
+  convert such a file unshrunk if it is under GROBID's limit (files of
+  19.4MB and 20.7MB = 19.8MiB were accepted).
+- **A CSV log whose first write never reached the disk has no header.**
+  A run killed before the buffered header was written left an empty file;
+  the next run saw the file existed and skipped the header. Write the
+  header when the file is missing *or empty*.
+- **Europe PMC author manuscripts.** When only publisher versions are
+  wanted, skip Europe PMC results with `authMan == "Y"` or
+  `epmcAuthMan == "Y"`.
+- **Download stamps.** PDFs fetched with institutional access (also some
+  fetched by a script over the VPN, e.g. Annual Reviews) carry a stamp
+  naming the institution and IP address; mention it in the README of a
+  corpus that is shared.
