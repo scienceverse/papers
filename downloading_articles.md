@@ -1666,3 +1666,27 @@ debugging either.
   fetched by a script over the VPN, e.g. Annual Reviews) carry a stamp
   naming the institution and IP address; mention it in the README of a
   corpus that is shared.
+
+## CrossRef's own PDF link can point to a superseded file (OJS journals)
+
+Some journals deposit a direct, version-of-record PDF link in CrossRef
+(`link[]` entries with `content-type: application/pdf`, `content-version:
+vor`, `intended-application: text-mining`). For journals running Open
+Journal Systems (OJS), such as *Meta-Psychology* on `open.lnu.se`, this
+link has the form `.../article/download/{article}/{file}`, where `{file}`
+identifies one specific uploaded PDF. When the journal later replaces the
+PDF (for example with a corrected version), CrossRef keeps the old file
+number. In the Meta-Psychology corpus 7 of 153 CrossRef links were
+outdated this way: 4 returned 404, and 3 **still downloaded successfully
+but delivered the superseded PDF** -- a valid `%PDF-` file of the right
+article that no automated check would flag. (9 further links used the
+journal's former host name, `conferences.lnu.se`, for the current file;
+those were harmless.)
+
+Fix: read the current PDF link from the article's own page
+(`.../article/view/{article}`, which links `.../article/view/{article}/{file}`
+for each attached file) and use CrossRef's link only as a fallback. Check
+first that each article has exactly one PDF file attached, so the choice
+is unambiguous. Record the address each PDF was actually downloaded from
+(`pdf_source` in `sample.csv`), so a re-run can tell an outdated file on
+disk from a current one.

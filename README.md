@@ -13,7 +13,7 @@ literature.
 All papers in this repository are open-access and are shared in accordance
 with their original licenses (typically CC-BY 4.0).
 
-**18 corpora, 15,179 papers, as of 2026-06-21.**
+**19 corpora, 15,329 papers, as of 2026-11-18.**
 
 If you are building a new corpus for this repository, read
 [downloading_articles.md](downloading_articles.md) first -- it documents
@@ -58,7 +58,7 @@ If you need a format that is not yet available, please
 
 ## Available corpora
 
-18 corpora, 15,179 papers in total.
+19 corpora, 15,329 papers in total.
 
 | Corpus | Journal | Papers | Years | License |
 |--------|---------|--------|-------|---------|
@@ -73,6 +73,7 @@ If you need a format that is not yet available, please
 | [jdm](jdm/) | Judgment and Decision Making | 855 | 2006-2022 | CC-BY 4.0 |
 | [joc](joc/) | Journal of Cognition | 447 | 2017-2026 | CC-BY 4.0 |
 | [jssm](jssm/) | Journal of Sports Science and Medicine | 1000 | 2014-2026 | CC-BY 4.0 or CC-BY-NC-ND 4.0 |
+| [metapsych](metapsych/) | Meta-Psychology | 150 | 2018-2026 | CC-BY 4.0 |
 | [natcomm](natcomm/) | Nature Communications | 1000 | 2017-2026 | Mostly CC-BY 4.0 |
 | [openmind](openmind/) | Open Mind | 293 | 2017-2026 | CC-BY 4.0 |
 | [plosbio](plosbio/) | PLOS Biology | 1000 | 2016-2025 | CC-BY 4.0 or CC0 |

@@ -1,0 +1,45 @@
+{
+  "@context": "http://dublincore.org/documents/dcmi-terms/",
+  "@type": "Dataset",
+  "dc:title": "Meta-Psychology - Complete Corpus (2018-2026)",
+  "dc:creator": "Lakens, Daniel",
+  "dc:subject": [
+    "psychology",
+    "metascience",
+    "computational reproducibility",
+    "open access",
+    "natural language processing",
+    "AI validation",
+    "text mining"
+  ],
+  "dc:description": "A complete corpus of 150 articles published in Meta-Psychology between 2018 and 2026 (all 153 CrossRef-registered articles minus 3 editorials), converted to metacheck paperlist objects for validation of AI and text-mining tools. Meta-Psychology checks the computational reproducibility of accepted articles; the manifest records the article type, open data/materials/code/analysis status, preregistration status, and who reproduced the analysis, as printed on each article's first page.",
+  "dc:publisher": "scienceverse/papers (GitHub)",
+  "dc:date": "2026-11-18",
+  "dc:type": "Dataset",
+  "dc:format": [
+    "application/pdf",
+    "application/x-r-rds",
+    "text/xml"
+  ],
+  "dc:identifier": "https://github.com/scienceverse/papers/tree/main/metapsych",
+  "dc:source": "Meta-Psychology, ISSN 2003-2714, DOI prefix 10.15626/mp, https://open.lnu.se/index.php/metapsychology",
+  "dc:language": "en",
+  "dc:relation": [
+    "https://open.lnu.se/index.php/metapsychology",
+    "https://github.com/scienceverse/metacheck"
+  ],
+  "dc:coverage": "2018-01-01/2026-11-18",
+  "dc:rights": "CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/)",
+  "dc:provenance": {
+    "doi_source": "CrossRef REST API, ISSN 2003-2714 (complete corpus, no sampling); 153 records, identical to the 153 articles on the journal's issue pages",
+    "sampling": "none -- all 153 journal-article records, 150 retained after excluding 3 editorials",
+    "pdf_source": "open.lnu.se, current PDF link read from each article page; CrossRef text-mining link as fallback (outdated for 7 articles)",
+    "conversion_tool": "GROBID 0.9.1",
+    "conversion_endpoint": "https://grobidOrg-grobid.hf.space (TU/e server https://grobid.hti.ieis.tue.nl not reachable outside the TU/e network)",
+    "paperlist_tool": "metacheck::grobid_to_bibr() (metacheck 0.4.4.3)",
+    "header_fields": "first-page open-science fields read with pdftools::pdf_text()",
+    "doi_matching": "DOIs overwritten from CrossRef; papers matched by file name",
+    "quality_audit": "3 editorials excluded, 3 empty GROBID titles filled from CrossRef, 5 PDFs print a mistaken DOI on page 1 (checked by hand, correct articles), 0 conversion failures, 0 duplicates, 0 papers without text, references or authors",
+    "conversion_date": "2026-11-18"
+  }
+}
